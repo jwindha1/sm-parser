@@ -4,6 +4,8 @@ import os
 import re
 import sys
 import json
+import platform
+from datetime import datetime, timezone
 
 # Parse Facebook files
 #facebook_zips = glob.glob('./inbox/*_facebook.zip')
@@ -23,4 +25,9 @@ for fbu in facebook_unzips:
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
     comments_json = open(comments_path).read()
     comments = json.loads(comments_json)['comments']
-    print(len(comments))
+    for comment in comments:
+        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
+        comment_date = timestamp.date()
+        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        print('{0} @ {1}'.format(comment_date, comment_time))
+
