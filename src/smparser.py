@@ -40,12 +40,12 @@ for fbu in facebook_unzips:
         comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
         comment_text = comment['data'][0]['comment']['comment'] if 'comment' in comment['data'][0]['comment'] else ''
         comment_author = comment['data'][0]['comment']['author']
-        comments_parsed.append([comment_date, comment_time, comment_author, bytes(comment_text, 'ascii', 'ignore').decode('unicode-escape'), comment_attachment])
+        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
 
     # Generate CSVs from data
     comment_csv = os.path.join(outbox_path, fbu, 'comments.csv')
     os.makedirs(os.path.dirname(comment_csv), exist_ok=True)
-    with open(comment_csv, "w+") as csv_file:
+    with open(comment_csv, "w+", encoding='utf-8') as csv_file:
         csv_writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL, lineterminator = '\n')
         for comment in comments_parsed:
             csv_writer.writerow(comment)
