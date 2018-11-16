@@ -27,20 +27,31 @@ facebook_unzips = list(filter(fb_regex.search, unzips))
 
 # Parse extracted Facebook datasets
 for fbu in facebook_unzips:
+    # Parse comments and likes
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
     comments_json = open(comments_path).read()
     comments = json.loads(comments_json)['comments']
     comments_parsed = [['Date', 'Time', 'Author', 'Comment', 'URL']]
     for comment in comments:
-        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
-
         # Extract comment details
-        comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
+        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
         comment_date = timestamp.date()
         comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
         comment_text = comment['data'][0]['comment']['comment'] if 'comment' in comment['data'][0]['comment'] else ''
         comment_author = comment['data'][0]['comment']['author']
         comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
+
+    # Parse posts
+    posts_path = os.path.join(temp_out, fbu, 'posts', 'your_posts.json')
+    posts_json = open(posts_path).read()
+    posts = json.loads(posts_json)['status_updates']
+    posts_parsed = [['Date', 'Time', 'Author', 'Post', 'Comments', 'Media']]
+    for post in posts:
+        # Extract comment details
+        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
+        comment_date = timestamp.date()
+        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
 
     # Generate CSVs from data
     comment_csv = os.path.join(outbox_path, fbu, 'comments.csv')
