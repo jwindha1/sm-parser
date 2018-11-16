@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 #    with zipfile.ZipFile(fbz,"r") as zip_ref:
 #        zip_ref.extractall("./inbox/temp")
 
-temp_out = os.path.join('src', 'inbox', 'temp')
-outbox_path = os.path.join('src', 'outbox')
+temp_out = os.path.join('inbox', 'temp')
+outbox_path = os.path.join('outbox')
 
 if len(sys.argv) != 2:
     sys.exit("ERROR: Path to zips required")
