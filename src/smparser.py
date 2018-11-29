@@ -37,7 +37,7 @@ facebook_unzips = list(filter(fb_regex.search, unzips))
 
 # Parse extracted Facebook datasets
 for fbu in facebook_unzips:
-    # Parse comments and likes
+    '''# Parse comments and likes
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
     comments_json = open(comments_path).read()
     comments = json.loads(comments_json)['comments']
@@ -83,15 +83,42 @@ for fbu in facebook_unzips:
         category = next((cat for cat in categories if cat in reaction['title']), 'other')
         react_totals[category][reaction['data'][0]['reaction']['reaction']] += 1
 
-    genCSV('reactions.csv', reactions_parsed)
+    genCSV('reactions.csv', reactions_parsed)'''
 
-    '''# Parse posts
+    # Parse posts
     posts_path = os.path.join(temp_out, fbu, 'posts', 'your_posts.json')
     posts_json = open(posts_path).read()
     posts = json.loads(posts_json)['status_updates']
-    posts_parsed = [['Date', 'Time', 'Author', 'Post', 'Comments', 'Media']]
+    posts_parsed = [['Date', 'Time', 'Post', 'Caption', 'Comments']]
+    i = 0
     for post in posts:
         # Extract comment details
-        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
-        comment_date = timestamp.date()
-        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")'''
+        timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
+        post_date = timestamp.date()
+        post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        if 'data' in post:
+            if 'post' in post['data'][0]:
+                caption = post['data'][0]['post']
+            else:
+                continue
+        elif 'title' in post:
+            caption = post['title']
+        else:
+            continue
+
+        if 'attachments' in post:
+            attachments = post['attachments'][0]['data']
+            for attachment in attachments:
+                if 'media' in attachment:
+                    content = attachment['media']
+                    media = content['uri']
+                elif 'external_context' in attachment:
+                    content = attachment['external_context']
+                    media = content['url']
+                comments = ''
+                if 'comments' in content:
+                    for comment in content['comments']:
+                        comments += '"' + comment['comment'] + '", '
+                entry = [post_date, post_time, media, caption, comments]
+                posts_parsed.append(entry)
+    genCSV('posts.csv', posts_parsed)
