@@ -35,14 +35,14 @@ def genCSV(filename, content):
             csv_writer.writerow(entry)
 
 # Parse Facebook files
-print('Unzipping facebook data dumps...', flush=True)
+'''print('Unzipping facebook data dumps...', flush=True)
 facebook_zips = glob.glob('./inbox/*_facebook.zip')
 fbz_counter = 1
 for fbz in facebook_zips:
     print('Unzipping {0} of {1} archives...'.format(fbz_counter, len(facebook_zips)), end='\r', flush=True)
     fbz_counter += 1
     with zipfile.ZipFile(fbz,"r") as zip_ref:
-        zip_ref.extractall("./inbox/temp")
+        zip_ref.extractall("./inbox/temp")'''
 
 temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
@@ -56,30 +56,33 @@ fb_regex = re.compile(r'.*_facebook$')
 facebook_unzips = list(filter(fb_regex.search, unzips))
 
 # Parse extracted Facebook datasets
-print('Parsing unzipped facebook data dumps...', flush=True)
+print('Unzipping complete!', flush=True)
 for fbu in facebook_unzips:
-    print('Parsing comments and likes of {0} data dump...'.format(fbu), flush=True)
-    # Parse comments and likes
-    comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
-    comments_json = open(comments_path).read()
-    comments = json.loads(comments_json)['comments']
-    comments_parsed = [['Date', 'Time', 'Author', 'Comment', 'URL']]
-    for comment in comments:
-        if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
-            continue
-        # Extract comment details
-        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
-        comment_date = timestamp.date()
-        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-        comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
-        comment_text = scrubadub.clean(comment['data'][0]['comment']['comment']) if 'comment' in comment['data'][0]['comment'] else ''
-        comment_author = comment['data'][0]['comment']['author']
-        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
+    # Get display name
+    profile_path = os.path.join(temp_out, fbu, 'profile_information', 'profile_information.json')
+    profile_json = open(profile_path).read()
+    display_name = json.loads(profile_json)['profile']['name']['full_name']
 
-    genCSV('comments.csv', comments_parsed)
+    print('Parsing {0}\'s friends...'.format(display_name), flush=True)
+    # Parse friends
+    friends_path = os.path.join(temp_out, fbu, 'friends', 'friends.json')
+    removed_path = os.path.join(temp_out, fbu, 'friends', 'removed_friends.json')
+    friends_json = open(friends_path).read()
+    removed_json = open(removed_path).read()
+    num_friends = len(json.loads(friends_json)['friends'])
+    removed_friends = json.loads(removed_json)['deleted_friends']
+    num_enemies = 0
+    friends_parsed = [['Total Friends', 'Removed Friends']]
+    for enemy in removed_friends:
+        if datetime.fromtimestamp(enemy['timestamp']) < datetime.now()-timedelta(days=183):
+            continue
+        num_enemies += 1
+    friends_parsed.append([num_friends, num_enemies])
+
+    genCSV('friends.csv', friends_parsed)
 
     # Parse reactions
-    print('Parsing reactions of {0} data dump...'.format(fbu), flush=True)
+    print('Parsing {0}\'s reactions...'.format(display_name), flush=True)
     reactions_path = os.path.join(temp_out, fbu, 'likes_and_reactions', 'posts_and_comments.json')
     reactions_json = open(reactions_path).read()
     reactions = json.loads(reactions_json)['reactions']
@@ -113,16 +116,17 @@ for fbu in facebook_unzips:
     genCSV('reactions.csv', reactions_parsed)
 
     # Parse posts
-    print('Parsing posts of {0} data dump...'.format(fbu), flush=True)
+    print('Parsing {0}\'s posts...'.format(display_name), flush=True)
     media_root = os.path.join(outbox_path, fbu, 'media')
     pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
     posts_path = os.path.join(temp_out, fbu, 'posts', 'your_posts.json')
     posts_json = open(posts_path).read()
     posts = json.loads(posts_json)['status_updates']
-    posts_parsed = [['Date', 'Time', 'Post', 'Caption', 'Comments']]
+    posts_parsed = [['Date', 'Time', 'Post', 'Caption', 'Friend Comments', 'Subject Comments']]
     media_id = 0
     supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
     post_counter = 1
+    rem_comments = []
     for post in posts:
         print('Parsing {0} of {1} posts...'.format(post_counter, len(posts)), end='\r', flush=True)
         post_counter += 1
@@ -151,19 +155,49 @@ for fbu in facebook_unzips:
                     content = attachment['external_context']
                     caption += ': ' + content['url']
                     media = ''
-                comments = ''
+                friend_comments = ''
+                subject_comments = ''
                 if 'comments' in content:
                     for comment in content['comments']:
-                        comments += '"' + scrubadub.clean(comment['comment']) + '", '
+                        if (display_name in comment['author']):
+                            subject_comments += '"' + scrubadub.clean(comment['comment']) + '", '
+                            rem_comments.append(comment['comment'])
+                        else:
+                            friend_comments += '"' + scrubadub.clean(comment['comment']) + '", '
                 scrubadub.clean(caption)
                 media_src = os.path.join(temp_out, fbu, media)
                 filename, file_extension = os.path.splitext(media)
                 media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
                 media_id += 1
-                if file_extension in supported_types:
-                    cv2.imwrite(media_dest, blurFaces(media_src))
-                else:
-                    copyfile(media_src, media_dest)
-                entry = [post_date, post_time, media_dest, caption, comments]
+                #if file_extension in supported_types:
+                    #cv2.imwrite(media_dest, blurFaces(media_src))
+                entry = [post_date, post_time, media_dest, caption, friend_comments, subject_comments]
                 posts_parsed.append(entry)
+
     genCSV('posts.csv', posts_parsed)
+
+    print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
+    # Parse comments and likes
+    comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
+    comments_json = open(comments_path).read()
+    comments = json.loads(comments_json)['comments']
+    comments_parsed = [['Date', 'Time', 'Author', 'Comment', 'URL']]
+    for comment in comments:
+        if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
+            continue
+        # Extract comment details
+        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
+        comment_date = timestamp.date()
+        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
+        if 'comment' in comment['data'][0]['comment']:
+            if comment['data'][0]['comment']['comment'] not in rem_comments:
+                comment_text = scrubadub.clean(comment['data'][0]['comment']['comment'])
+            else:
+                continue
+        else:
+            comment_text = ''
+        comment_author = comment['data'][0]['comment']['author']
+        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
+
+    genCSV('comments.csv', comments_parsed)
