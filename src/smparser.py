@@ -25,16 +25,16 @@ def blurFaces(image):
 
     return img
 
-def genCSV(filename, content):
+def genCSV(folder, filename, content):
     # Generate CSVs from data
-    csv_out = os.path.join(outbox_path, fbu, filename)
+    csv_out = os.path.join(outbox_path, folder, filename)
     os.makedirs(os.path.dirname(csv_out), exist_ok=True)
     with open(csv_out, "w+", encoding='utf-8') as csv_file:
         csv_writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL, lineterminator = '\n')
         for entry in content:
             csv_writer.writerow(entry)
 
-# Parse Facebook files
+'''# Parse Facebook files
 print('Unzipping facebook data dumps...', flush=True)
 facebook_zips = glob.glob('./inbox/*_facebook.zip')
 fbz_counter = 1
@@ -52,7 +52,7 @@ if len(sys.argv) != 2:
 
 # ID extracted datasets
 unzips = os.listdir(temp_out)
-fb_regex = re.compile(r'.*_facebook$')
+fb_regex = re.compile(r'.*_[fF]acebook$')
 facebook_unzips = list(filter(fb_regex.search, unzips))
 
 # Parse extracted Facebook datasets
@@ -79,7 +79,7 @@ for fbu in facebook_unzips:
         num_enemies += 1
     friends_parsed.append([num_friends, num_enemies])
 
-    genCSV('friends.csv', friends_parsed)
+    genCSV(fbu, 'friends.csv', friends_parsed)
 
     # Parse reactions
     print('Parsing {0}\'s reactions...'.format(display_name), flush=True)
@@ -113,7 +113,7 @@ for fbu in facebook_unzips:
         category = next((cat for cat in categories if cat in reaction['title']), 'other')
         react_totals[category][reaction['data'][0]['reaction']['reaction']] += 1
 
-    genCSV('reactions.csv', reactions_parsed)
+    genCSV(fbu, 'reactions.csv', reactions_parsed)
 
     # Parse posts
     print('Parsing {0}\'s posts...'.format(display_name), flush=True)
@@ -296,7 +296,7 @@ for fbu in facebook_unzips:
                 entry = [post_date, post_time, location, media_dest, caption, friend_comments, subject_comments]
                 posts_parsed.append(entry)
 
-    genCSV('posts.csv', posts_parsed)
+    genCSV(fbu, 'posts.csv', posts_parsed)
 
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
@@ -306,7 +306,7 @@ for fbu in facebook_unzips:
     timeline_path = os.path.join(temp_out, fbu, 'posts', 'other_people\'s_posts_to_your_timeline.json')
     timeline_json = open(timeline_path).read()
     timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
-    comments_parsed = [['Date', 'Time', 'Author', 'Comment', 'URL']]
+    comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
     for comment in comments:
         if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
             continue
@@ -323,7 +323,7 @@ for fbu in facebook_unzips:
         else:
             comment_text = ''
         comment_author = comment['data'][0]['comment']['author']
-        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
+        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, '', comment_attachment])
 
     for timeline_post in timeline:
         if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=183):
@@ -353,4 +353,67 @@ for fbu in facebook_unzips:
 
         comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text, attachment])
 
-    genCSV('comments.csv', comments_parsed)
+    genCSV(fbu, 'comments.csv', comments_parsed)
+
+# Parse Instagram files
+print('Unzipping Instagram data dumps...', flush=True)
+instagram_zips = glob.glob('./inbox/*_instagram.zip')
+fbz_counter = 1
+for fbz in instagram_zips:
+    print('Unzipping {0} of {1} archives...'.format(fbz_counter, len(instagram_zips)), end='\r', flush=True)
+    fbz_counter += 1
+    with zipfile.ZipFile(fbz,"r") as zip_ref:
+        zip_ref.extractall("./inbox/temp")'''
+
+temp_out = os.path.join('inbox', 'temp')
+outbox_path = os.path.join('outbox')
+
+if len(sys.argv) != 2:
+    sys.exit("ERROR: Path to zips required")
+
+# ID extracted datasets
+unzips = os.listdir(temp_out)
+ig_regex = re.compile(r'.*_[iI]nstagram$')
+instagram_unzips = list(filter(ig_regex.search, unzips))
+
+# Parse extracted Instagram datasets
+print('\nUnzipping complete!', flush=True)
+for igu in instagram_unzips:
+    # Get display name
+    profile_path = os.path.join(temp_out, igu, 'profile.json')
+    profile_json = open(profile_path).read()
+    display_name = json.loads(profile_json)['name']
+
+    # Parse comments
+    print('Parsing {0}\'s comments...'.format(display_name), flush=True)
+    comments_path = os.path.join(temp_out, igu, 'comments.json')
+    comments_json = open(comments_path, encoding='utf8').read()
+    comments = json.loads(comments_json)
+    comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Comment']]
+    for comment_sections in comments:
+        for comment in comments[comment_sections]:
+            timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
+            if timestamp < datetime.now()-timedelta(days=183):
+                pass#continue
+            post_date = timestamp.date()
+            post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+            content = scrubadub.clean(comment[1])
+            author = comment[2]
+            subject_comment = ''
+            friend_comment = ''
+            if (display_name in author):
+                subject_comment = content
+            else:
+                friend_comment = content
+            comments_parsed.append([post_date, post_time, author, subject_comment, friend_comment])
+
+    genCSV(igu, 'comments.csv', comments_parsed)
+
+    f1=open('./testfile.txt', 'w+')
+
+    print('Parsing {0}\'s likes...'.format(display_name), flush=True)
+    likes_path = os.path.join(temp_out, igu, 'likes.json')
+    likes_json = open(likes_path, encoding='utf8').read()
+    likes = json.loads(likes_json)
+
+    print(json.dumps(likes, indent=4, sort_keys=True), file=f1)
