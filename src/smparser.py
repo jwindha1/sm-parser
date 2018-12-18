@@ -14,6 +14,8 @@ import cv2
 from shutil import copyfile
 import pathlib
 
+supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
+
 def blurFaces(image):
     img = cv2.imread(image)
     faces = face_recognition.face_locations(img)
@@ -34,7 +36,7 @@ def genCSV(folder, filename, content):
         for entry in content:
             csv_writer.writerow(entry)
 
-'''# Parse Facebook files
+# Parse Facebook files
 print('Unzipping facebook data dumps...', flush=True)
 facebook_zips = glob.glob('./inbox/*_facebook.zip')
 fbz_counter = 1
@@ -125,7 +127,6 @@ for fbu in facebook_unzips:
     posts_parsed = [['Date', 'Time', 'Location', 'Post', 'Caption', 'Friend Comments', 'Subject Comments']]
     location = 'Profile'
     media_id = 0
-    supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
     post_counter = 1
     rem_comments = []
     for post in posts:
@@ -363,7 +364,7 @@ for fbz in instagram_zips:
     print('Unzipping {0} of {1} archives...'.format(fbz_counter, len(instagram_zips)), end='\r', flush=True)
     fbz_counter += 1
     with zipfile.ZipFile(fbz,"r") as zip_ref:
-        zip_ref.extractall("./inbox/temp")'''
+        zip_ref.extractall("./inbox/temp")
 
 temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
@@ -409,11 +410,41 @@ for igu in instagram_unzips:
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
-    f1=open('./testfile.txt', 'w+')
+    #f1=open('./testfile.txt', 'w+')
+    #print(json.dumps(media, indent=4, sort_keys=True), file=f1)
 
-    print('Parsing {0}\'s likes...'.format(display_name), flush=True)
-    likes_path = os.path.join(temp_out, igu, 'likes.json')
-    likes_json = open(likes_path, encoding='utf8').read()
-    likes = json.loads(likes_json)
+    print('Parsing {0}\'s media...'.format(display_name), flush=True)
+    media_path = os.path.join(temp_out, igu, 'media.json')
+    media_json = open(media_path, encoding='utf8').read()
+    media = json.loads(media_json)
+    media_parsed = [['Date', 'Time', 'Media Path', 'Caption']]
+    media_id = 0
+    media_root = os.path.join(outbox_path, igu, 'media')
+    pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
+    num_entries = 0
+    post_counter = 1
 
-    print(json.dumps(likes, indent=4, sort_keys=True), file=f1)
+    for media_types in media:
+        num_entries += len(media[media_types])
+    for media_types in media:
+        for image in media[media_types]:
+            print('Parsing {0} of {1} media posts...'.format(post_counter, num_entries), end='\r', flush=True)
+            post_counter += 1
+            timestamp = datetime.strptime(image['taken_at'], '%Y-%m-%dT%H:%M:%S')
+            if timestamp < datetime.now()-timedelta(days=183):
+                continue
+            post_date = timestamp.date()
+            post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+            caption  = scrubadub.clean(image['caption'])
+            image = image['path']
+            media_src = os.path.join(temp_out, igu, image)
+            filename, file_extension = os.path.splitext(image)
+            media_dest = 'N/A'
+            if file_extension in supported_types:
+                media_id += 1
+                media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
+                cv2.imwrite(media_dest, blurFaces(media_src))
+
+            media_parsed.append([post_date, post_time, media_dest, caption])
+
+    genCSV(igu, 'media.csv', media_parsed)
