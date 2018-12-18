@@ -14,11 +14,8 @@ import cv2
 from shutil import copyfile
 import pathlib
 
-<<<<<<< HEAD
-=======
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
->>>>>>> dev
 def blurFaces(image):
     img = cv2.imread(image)
     faces = face_recognition.face_locations(img)
@@ -30,15 +27,9 @@ def blurFaces(image):
 
     return img
 
-<<<<<<< HEAD
-def genCSV(filename, content):
-    # Generate CSVs from data
-    csv_out = os.path.join(outbox_path, fbu, filename)
-=======
 def genCSV(folder, filename, content):
     # Generate CSVs from data
     csv_out = os.path.join(outbox_path, folder, filename)
->>>>>>> dev
     os.makedirs(os.path.dirname(csv_out), exist_ok=True)
     with open(csv_out, "w+", encoding='utf-8') as csv_file:
         csv_writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL, lineterminator = '\n')
@@ -63,11 +54,7 @@ if len(sys.argv) != 2:
 
 # ID extracted datasets
 unzips = os.listdir(temp_out)
-<<<<<<< HEAD
-fb_regex = re.compile(r'.*_facebook$')
-=======
 fb_regex = re.compile(r'.*_[fF]acebook$')
->>>>>>> dev
 facebook_unzips = list(filter(fb_regex.search, unzips))
 
 # Parse extracted Facebook datasets
@@ -94,11 +81,7 @@ for fbu in facebook_unzips:
         num_enemies += 1
     friends_parsed.append([num_friends, num_enemies])
 
-<<<<<<< HEAD
-    genCSV('friends.csv', friends_parsed)
-=======
     genCSV(fbu, 'friends.csv', friends_parsed)
->>>>>>> dev
 
     # Parse reactions
     print('Parsing {0}\'s reactions...'.format(display_name), flush=True)
@@ -132,11 +115,7 @@ for fbu in facebook_unzips:
         category = next((cat for cat in categories if cat in reaction['title']), 'other')
         react_totals[category][reaction['data'][0]['reaction']['reaction']] += 1
 
-<<<<<<< HEAD
-    genCSV('reactions.csv', reactions_parsed)
-=======
     genCSV(fbu, 'reactions.csv', reactions_parsed)
->>>>>>> dev
 
     # Parse posts
     print('Parsing {0}\'s posts...'.format(display_name), flush=True)
@@ -148,10 +127,6 @@ for fbu in facebook_unzips:
     posts_parsed = [['Date', 'Time', 'Location', 'Post', 'Caption', 'Friend Comments', 'Subject Comments']]
     location = 'Profile'
     media_id = 0
-<<<<<<< HEAD
-    supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
-=======
->>>>>>> dev
     post_counter = 1
     rem_comments = []
     for post in posts:
@@ -322,11 +297,7 @@ for fbu in facebook_unzips:
                 entry = [post_date, post_time, location, media_dest, caption, friend_comments, subject_comments]
                 posts_parsed.append(entry)
 
-<<<<<<< HEAD
-    genCSV('posts.csv', posts_parsed)
-=======
     genCSV(fbu, 'posts.csv', posts_parsed)
->>>>>>> dev
 
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
@@ -336,11 +307,7 @@ for fbu in facebook_unzips:
     timeline_path = os.path.join(temp_out, fbu, 'posts', 'other_people\'s_posts_to_your_timeline.json')
     timeline_json = open(timeline_path).read()
     timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
-<<<<<<< HEAD
-    comments_parsed = [['Date', 'Time', 'Author', 'Comment', 'URL']]
-=======
     comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
->>>>>>> dev
     for comment in comments:
         if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
             continue
@@ -357,11 +324,7 @@ for fbu in facebook_unzips:
         else:
             comment_text = ''
         comment_author = comment['data'][0]['comment']['author']
-<<<<<<< HEAD
-        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, comment_attachment])
-=======
         comments_parsed.append([comment_date, comment_time, comment_author, comment_text, '', comment_attachment])
->>>>>>> dev
 
     for timeline_post in timeline:
         if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=183):
@@ -391,9 +354,6 @@ for fbu in facebook_unzips:
 
         comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text, attachment])
 
-<<<<<<< HEAD
-    genCSV('comments.csv', comments_parsed)
-=======
     genCSV(fbu, 'comments.csv', comments_parsed)
 
 # Parse Instagram files
@@ -488,4 +448,3 @@ for igu in instagram_unzips:
             media_parsed.append([post_date, post_time, media_dest, caption])
 
     genCSV(igu, 'media.csv', media_parsed)
->>>>>>> dev
