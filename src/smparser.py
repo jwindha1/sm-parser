@@ -173,7 +173,7 @@ for fbu in facebook_unzips:
                     media_id += 1
                     media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
                     cv2.imwrite(media_dest, blurFaces(media_src))
-                entry = [post_date, post_time, location, media_dest, caption, friend_comments, subject_comments]
+                entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                 posts_parsed.append(entry)
 
     # Parse group posts
@@ -242,7 +242,7 @@ for fbu in facebook_unzips:
                     media_id += 1
                     media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
                     cv2.imwrite(media_dest, blurFaces(media_src))
-                entry = [post_date, post_time, location, media_dest, caption, friend_comments, subject_comments]
+                entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                 posts_parsed.append(entry)
 
     # Parse profile update posts
@@ -294,7 +294,7 @@ for fbu in facebook_unzips:
                     media_id += 1
                     media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
                     cv2.imwrite(media_dest, blurFaces(media_src))
-                entry = [post_date, post_time, location, media_dest, caption, friend_comments, subject_comments]
+                entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                 posts_parsed.append(entry)
 
     genCSV(fbu, 'posts.csv', posts_parsed)
@@ -324,7 +324,7 @@ for fbu in facebook_unzips:
         else:
             comment_text = ''
         comment_author = comment['data'][0]['comment']['author']
-        comments_parsed.append([comment_date, comment_time, comment_author, comment_text, '', comment_attachment])
+        comments_parsed.append([comment_date, comment_time, comment_author, comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
 
     for timeline_post in timeline:
         if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=183):
@@ -352,7 +352,7 @@ for fbu in facebook_unzips:
         else:
             comment_text = timeline_post['data'][0]['post']
 
-        comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text, attachment])
+        comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
 
     genCSV(fbu, 'comments.csv', comments_parsed)
 
