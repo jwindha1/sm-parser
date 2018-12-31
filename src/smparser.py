@@ -13,6 +13,8 @@ import face_recognition
 import cv2
 from shutil import copyfile
 import pathlib
+import instaloader
+from itertools import dropwhile, takewhile
 
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
@@ -36,7 +38,7 @@ def genCSV(folder, filename, content):
         for entry in content:
             csv_writer.writerow(entry)
 
-# Parse Facebook files
+'''# Parse Facebook files
 print('Unzipping facebook data dumps...', flush=True)
 facebook_zips = glob.glob('./inbox/*_facebook.zip')
 fbz_counter = 1
@@ -354,7 +356,7 @@ for fbu in facebook_unzips:
 
         comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
 
-    genCSV(fbu, 'comments.csv', comments_parsed)
+    genCSV(fbu, 'comments.csv', comments_parsed)'''
 
 # Parse Instagram files
 print('Unzipping Instagram data dumps...', flush=True)
@@ -369,9 +371,6 @@ for fbz in instagram_zips:
 temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
 
-if len(sys.argv) != 2:
-    sys.exit("ERROR: Path to zips required")
-
 # ID extracted datasets
 unzips = os.listdir(temp_out)
 ig_regex = re.compile(r'.*_[iI]nstagram$')
@@ -384,6 +383,7 @@ for igu in instagram_unzips:
     profile_path = os.path.join(temp_out, igu, 'profile.json')
     profile_json = open(profile_path).read()
     display_name = json.loads(profile_json)['name']
+    user_name = json.loads(profile_json)['username']
 
     # Parse comments
     print('Parsing {0}\'s comments...'.format(display_name), flush=True)
@@ -448,3 +448,33 @@ for igu in instagram_unzips:
             media_parsed.append([post_date, post_time, media_dest, caption])
 
     genCSV(igu, 'media.csv', media_parsed)
+
+    # Pull Instagram data from web
+    posts_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Comment']]
+    L = instaloader.Instaloader()
+    print()
+    L.interactive_login('connorspangler')
+    #L.interactive_login(user_name)
+    posts = instaloader.Profile.from_username(L.context, user_name).get_posts()
+    SINCE = datetime.today()
+    UNTIL = SINCE - timedelta(days=183)
+    post_count = 0
+    print('Parsing {0}\'s media...'.format(user_name), flush=True)
+    for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
+        media_dest = os.path.join(media_root, post_count)
+        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
+        post_count += 1
+
+        print(post.date)
+        print(post.caption)
+        comments = ''
+        for comment in post.get_comments():
+            comments += '"' + scrubadub.clean(comment[2]) + '", '
+        print(comments)
+
+    print(media_root)
+
+    print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
+    for filename in os.listdir(media_root):
+        if any(filename.endswith(end) for end in supported_types):
+            cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
