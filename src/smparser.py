@@ -38,7 +38,7 @@ def genCSV(folder, filename, content):
         for entry in content:
             csv_writer.writerow(entry)
 
-'''# Parse Facebook files
+# Parse Facebook files
 print('Unzipping facebook data dumps...', flush=True)
 facebook_zips = glob.glob('./inbox/*_facebook.zip')
 fbz_counter = 1
@@ -50,9 +50,6 @@ for fbz in facebook_zips:
 
 temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
-
-if len(sys.argv) != 2:
-    sys.exit("ERROR: Path to zips required")
 
 # ID extracted datasets
 unzips = os.listdir(temp_out)
@@ -190,7 +187,7 @@ for fbu in facebook_unzips:
         post_counter += 1
         # Extract comment details
         if datetime.fromtimestamp(post['timestamp']) < datetime.now()-timedelta(days=183):
-            pass
+            continue
         timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
         post_date = timestamp.date()
         post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
@@ -259,7 +256,7 @@ for fbu in facebook_unzips:
         post_counter += 1
         # Extract comment details
         if datetime.fromtimestamp(post['timestamp']) < datetime.now()-timedelta(days=183):
-            pass
+            continue
         timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
         post_date = timestamp.date()
         post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
@@ -356,7 +353,7 @@ for fbu in facebook_unzips:
 
         comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
 
-    genCSV(fbu, 'comments.csv', comments_parsed)'''
+    genCSV(fbu, 'comments.csv', comments_parsed)
 
 # Parse Instagram files
 print('Unzipping Instagram data dumps...', flush=True)
@@ -395,7 +392,7 @@ for igu in instagram_unzips:
         for comment in comments[comment_sections]:
             timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
             if timestamp < datetime.now()-timedelta(days=183):
-                pass#continue
+                continue
             post_date = timestamp.date()
             post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
             content = scrubadub.clean(comment[1])
@@ -410,71 +407,33 @@ for igu in instagram_unzips:
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
-    #f1=open('./testfile.txt', 'w+')
-    #print(json.dumps(media, indent=4, sort_keys=True), file=f1)
-
-    print('Parsing {0}\'s media...'.format(display_name), flush=True)
-    media_path = os.path.join(temp_out, igu, 'media.json')
-    media_json = open(media_path, encoding='utf8').read()
-    media = json.loads(media_json)
-    media_parsed = [['Date', 'Time', 'Media Path', 'Caption']]
-    media_id = 0
-    media_root = os.path.join(outbox_path, igu, 'media')
-    pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
-    num_entries = 0
-    post_counter = 1
-
-    for media_types in media:
-        num_entries += len(media[media_types])
-    for media_types in media:
-        for image in media[media_types]:
-            print('Parsing {0} of {1} media posts...'.format(post_counter, num_entries), end='\r', flush=True)
-            post_counter += 1
-            timestamp = datetime.strptime(image['taken_at'], '%Y-%m-%dT%H:%M:%S')
-            if timestamp < datetime.now()-timedelta(days=183):
-                continue
-            post_date = timestamp.date()
-            post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-            caption  = scrubadub.clean(image['caption'])
-            image = image['path']
-            media_src = os.path.join(temp_out, igu, image)
-            filename, file_extension = os.path.splitext(image)
-            media_dest = 'N/A'
-            if file_extension in supported_types:
-                media_id += 1
-                media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
-                cv2.imwrite(media_dest, blurFaces(media_src))
-
-            media_parsed.append([post_date, post_time, media_dest, caption])
-
-    genCSV(igu, 'media.csv', media_parsed)
-
     # Pull Instagram data from web
-    posts_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Comment']]
+    posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Comments']]
     L = instaloader.Instaloader()
-    print()
-    L.interactive_login('connorspangler')
-    #L.interactive_login(user_name)
+    L.interactive_login(user_name)
     posts = instaloader.Profile.from_username(L.context, user_name).get_posts()
     SINCE = datetime.today()
     UNTIL = SINCE - timedelta(days=183)
     post_count = 0
     print('Parsing {0}\'s media...'.format(user_name), flush=True)
     for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
-        media_dest = os.path.join(media_root, post_count)
+        media_dest = os.path.join(media_root, str(post_count))
         L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
         post_count += 1
 
-        print(post.date)
-        print(post.caption)
+        time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
+        date = post.date_local.date()
+        caption = post.caption
         comments = ''
         for comment in post.get_comments():
             comments += '"' + scrubadub.clean(comment[2]) + '", '
-        print(comments)
 
-    print(media_root)
+        entry = [date, time, media_dest, caption, comments]
+        posts_parsed.append(entry)
 
     print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
     for filename in os.listdir(media_root):
         if any(filename.endswith(end) for end in supported_types):
             cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
+
+    genCSV(igu, 'posts.csv', posts_parsed)
