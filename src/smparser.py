@@ -389,7 +389,7 @@ for igu in instagram_unzips:
     comments_path = os.path.join(temp_out, igu, 'comments.json')
     comments_json = open(comments_path, encoding='utf8').read()
     comments = json.loads(comments_json)
-    comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Comment']]
+    comments_parsed = [['Date', 'Time', 'Subject\'s Photo', 'Friend\s Photo']]
     for comment_sections in comments:
         for comment in comments[comment_sections]:
             timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
@@ -398,14 +398,13 @@ for igu in instagram_unzips:
             post_date = timestamp.date()
             post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
             content = scrubadub.clean(comment[1])
-            author = comment[2]
             subject_comment = ''
             friend_comment = ''
             if (display_name in author):
                 subject_comment = content
             else:
                 friend_comment = content
-            comments_parsed.append([post_date, post_time, author, subject_comment, friend_comment])
+            comments_parsed.append([post_date, post_time, subject_comment, friend_comment])
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
