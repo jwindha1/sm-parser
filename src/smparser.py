@@ -358,11 +358,11 @@ for fbu in facebook_unzips:
 # Parse Instagram files
 print('Unzipping Instagram data dumps...', flush=True)
 instagram_zips = glob.glob('./inbox/*_instagram.zip')
-fbz_counter = 1
-for fbz in instagram_zips:
-    print('Unzipping {0} of {1} archives...'.format(fbz_counter, len(instagram_zips)), end='\r', flush=True)
-    fbz_counter += 1
-    with zipfile.ZipFile(fbz,"r") as zip_ref:
+igz_counter = 1
+for igz in instagram_zips:
+    print('Unzipping {0} of {1} archives...'.format(igz_counter, len(instagram_zips)), end='\r', flush=True)
+    igz_counter += 1
+    with zipfile.ZipFile(igz,"r") as zip_ref:
         zip_ref.extractall("./inbox/temp")
 
 temp_out = os.path.join('inbox', 'temp')
@@ -381,6 +381,8 @@ for igu in instagram_unzips:
     profile_json = open(profile_path).read()
     display_name = json.loads(profile_json)['name']
     user_name = json.loads(profile_json)['username']
+    media_root = os.path.join(outbox_path, igu, 'media')
+    pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
 
     # Parse comments
     print('Parsing {0}\'s comments...'.format(display_name), flush=True)
@@ -409,16 +411,16 @@ for igu in instagram_unzips:
 
     # Pull Instagram data from web
     posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Comments']]
-    L = instaloader.Instaloader()
-    L.interactive_login(user_name)
+    L = instaloader.Instaloader(quiet=True)
+    #L.interactive_login(user_name)
+    user_name = 'ohh.gee.mac'
     posts = instaloader.Profile.from_username(L.context, user_name).get_posts()
     SINCE = datetime.today()
     UNTIL = SINCE - timedelta(days=183)
     post_count = 0
     print('Parsing {0}\'s media...'.format(user_name), flush=True)
     for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
-        media_dest = os.path.join(media_root, str(post_count))
-        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
+        L.download_pic(os.path.join(media_root, str(post_count)), post.url, post.date, filename_suffix=None)
         post_count += 1
 
         time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
