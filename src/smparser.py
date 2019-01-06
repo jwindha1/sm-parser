@@ -411,9 +411,8 @@ for igu in instagram_unzips:
 
     # Pull Instagram data from web
     posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Comments']]
-    L = instaloader.Instaloader(quiet=True)
-    #L.interactive_login(user_name)
-    user_name = 'ohh.gee.mac'
+    L = instaloader.Instaloader()
+    L.interactive_login(user_name)
     posts = instaloader.Profile.from_username(L.context, user_name).get_posts()
     SINCE = datetime.today()
     UNTIL = SINCE - timedelta(days=183)
