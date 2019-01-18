@@ -389,7 +389,7 @@ for igu in instagram_unzips:
     comments_path = os.path.join(temp_out, igu, 'comments.json')
     comments_json = open(comments_path, encoding='utf8').read()
     comments = json.loads(comments_json)
-    comments_parsed = [['Date', 'Time', 'Subject\'s Photo', 'Friend\s Photo']]
+    comments_parsed = [['Date', 'Time', 'Subject\'s Photo', 'Friend\'s Photo']]
     for comment_sections in comments:
         for comment in comments[comment_sections]:
             timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
@@ -398,6 +398,14 @@ for igu in instagram_unzips:
             post_date = timestamp.date()
             post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
             content = scrubadub.clean(comment[1])
+            unrem = ''
+            for word in content.split():
+                if word[0] is '@':
+                    unrem += '{{USERNAME}} '
+                else:
+                    unrem += word + ' '
+            content = unrem
+            author = comment[2]
             subject_comment = ''
             friend_comment = ''
             if (display_name in author):
@@ -409,10 +417,19 @@ for igu in instagram_unzips:
     genCSV(igu, 'comments.csv', comments_parsed)
 
     # Pull Instagram data from web
-    posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Comments']]
+    posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
     L = instaloader.Instaloader()
     L.interactive_login(user_name)
-    posts = instaloader.Profile.from_username(L.context, user_name).get_posts()
+    profile = instaloader.Profile.from_username(L.context, user_name)
+    posts = profile.get_posts()
+
+    follow_parsed = [
+        ['Followers', 'Followees'],
+        [profile.followers, profile.followees]
+        ]
+
+    genCSV(igu, 'following.csv', follow_parsed)
+
     SINCE = datetime.today()
     UNTIL = SINCE - timedelta(days=183)
     post_count = 0
@@ -421,14 +438,21 @@ for igu in instagram_unzips:
         L.download_pic(os.path.join(media_root, str(post_count)), post.url, post.date, filename_suffix=None)
         post_count += 1
 
+        likes = post.likes
         time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
         date = post.date_local.date()
         caption = post.caption
         comments = ''
         for comment in post.get_comments():
-            comments += '"' + scrubadub.clean(comment[2]) + '", '
+            unrem = ''
+            for word in comment[2].split():
+                if word[0] is '@':
+                    unrem += '{{USERNAME}} '
+                else:
+                    unrem += word + ' '
+            comments += '"' + scrubadub.clean(unrem) + '", '
 
-        entry = [date, time, media_dest, caption, comments]
+        entry = [date, time, media_dest, caption, likes, comments]
         posts_parsed.append(entry)
 
     print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
