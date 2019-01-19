@@ -435,7 +435,8 @@ for igu in instagram_unzips:
     post_count = 0
     print('Parsing {0}\'s media...'.format(user_name), flush=True)
     for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
-        L.download_pic(os.path.join(media_root, str(post_count)), post.url, post.date, filename_suffix=None)
+        media_dest = os.path.join(media_root, str(post_count))
+        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
         post_count += 1
 
         likes = post.likes
