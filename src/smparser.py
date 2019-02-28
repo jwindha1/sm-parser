@@ -180,6 +180,8 @@ for fbu in facebook_unzips:
     posts_path = os.path.join(temp_out, fbu, 'groups', 'your_posts_and_comments_in_groups.json')
     posts_json = open(posts_path).read()
     posts = json.loads(posts_json)['group_posts']
+    if 'activity_log_data' in posts:
+        posts = posts['activity_log_data']
     post_counter = 1
     rem_comments = []
     for post in posts:
