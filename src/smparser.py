@@ -324,57 +324,59 @@ for fbu in facebook_unzips:
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
-    comments_json = open(comments_path).read()
-    comments = json.loads(comments_json)['comments']
+    if os.path.isfile(comments_path):
+        comments_json = open(comments_path).read()
+        comments = json.loads(comments_json)['comments']
+        comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
+        for comment in comments:
+            if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
+                continue
+            # Extract comment details
+            timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
+            comment_date = timestamp.date()
+            comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+            comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
+            if 'comment' in comment['data'][0]['comment']:
+                if comment['data'][0]['comment']['comment'] not in rem_comments:
+                    comment_text = scrubadub.clean(comment['data'][0]['comment']['comment'])
+                else:
+                    continue
+            else:
+                comment_text = ''
+            comment_author = comment['data'][0]['comment']['author']
+            comments_parsed.append([comment_date, comment_time, comment_author, comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
+
     timeline_path = os.path.join(temp_out, fbu, 'posts', 'other_people\'s_posts_to_your_timeline.json')
-    timeline_json = open(timeline_path).read()
-    timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
-    comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
-    for comment in comments:
-        if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
-            continue
-        # Extract comment details
-        timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
-        comment_date = timestamp.date()
-        comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-        comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
-        if 'comment' in comment['data'][0]['comment']:
-            if comment['data'][0]['comment']['comment'] not in rem_comments:
-                comment_text = scrubadub.clean(comment['data'][0]['comment']['comment'])
-            else:
+    if os.path.isfile(timeline_path):
+        timeline_json = open(timeline_path).read()
+        timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
+        for timeline_post in timeline:
+            if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=183):
                 continue
-        else:
-            comment_text = ''
-        comment_author = comment['data'][0]['comment']['author']
-        comments_parsed.append([comment_date, comment_time, comment_author, comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
+            # Extract comment details
+            timestamp = datetime.fromtimestamp(timeline_post['timestamp'], timezone.utc)
+            timeline_post_date = timestamp.date()
+            timeline_post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
 
-    for timeline_post in timeline:
-        if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=183):
-            continue
-        # Extract comment details
-        timestamp = datetime.fromtimestamp(timeline_post['timestamp'], timezone.utc)
-        timeline_post_date = timestamp.date()
-        timeline_post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-
-        if 'data' not in timeline_post:
-            continue
-
-        attachment = ''
-        if 'attachments' in timeline_post:
-            if 'media' in timeline_post['attachments'][0]['data'][0]:
-                attachment = timeline_post['attachments'][0]['data'][0]['media']['uri']
-            elif 'external_context' in timeline_post['attachments'][0]['data'][0]:
-                attachment = timeline_post['attachments'][0]['data'][0]['external_context']['url']
-
-        if 'post' not in timeline_post['data'][0]:
-            if attachment is not '':
-                comment_text = attachment
-            else:
+            if 'data' not in timeline_post:
                 continue
-        else:
-            comment_text = timeline_post['data'][0]['post']
 
-        comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
+            attachment = ''
+            if 'attachments' in timeline_post:
+                if 'media' in timeline_post['attachments'][0]['data'][0]:
+                    attachment = timeline_post['attachments'][0]['data'][0]['media']['uri']
+                elif 'external_context' in timeline_post['attachments'][0]['data'][0]:
+                    attachment = timeline_post['attachments'][0]['data'][0]['external_context']['url']
+
+            if 'post' not in timeline_post['data'][0]:
+                if attachment is not '':
+                    comment_text = attachment
+                else:
+                    continue
+            else:
+                comment_text = timeline_post['data'][0]['post']
+
+            comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
 
     genCSV(fbu, 'comments.csv', comments_parsed)
 
