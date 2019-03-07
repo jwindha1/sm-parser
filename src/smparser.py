@@ -324,10 +324,10 @@ for fbu in facebook_unzips:
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
+    comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
     if os.path.isfile(comments_path):
         comments_json = open(comments_path).read()
         comments = json.loads(comments_json)['comments']
-        comments_parsed = [['Date', 'Time', 'Author', 'Subject Comment', 'Friend Timeline Comment', 'URL']]
         for comment in comments:
             if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=183):
                 continue
