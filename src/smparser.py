@@ -85,8 +85,6 @@ for fbu in facebook_unzips:
             removed_friends = json.loads(removed_json)['deleted_friends']
             num_enemies = 0
             for enemy in removed_friends:
-                if datetime.fromtimestamp(enemy['timestamp']) < datetime.now()-timedelta(days=183):
-                    continue
                 num_enemies += 1
             friends_parsed.append([num_friends, num_enemies])
         else:
