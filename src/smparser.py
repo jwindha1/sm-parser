@@ -69,8 +69,6 @@ for fbu in facebook_unzips:
     if os.path.isfile(profile_path):
         profile_json = open(profile_path).read()
         display_name = json.loads(profile_json)['profile']['name']['full_name']
-    else:
-        print('NO PROFILE DEETS')
 
     print('Parsing {0}\'s friends...'.format(display_name), flush=True)
     # Parse friends
@@ -134,12 +132,12 @@ for fbu in facebook_unzips:
     media_root = os.path.join(outbox_path, fbu, 'media')
     pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
     posts_path = os.path.join(temp_out, fbu, 'posts', 'your_posts.json')
+    media_id = 0
     if os.path.isfile(posts_path):
         found_posts += 1
         posts_json = open(posts_path).read()
         posts = json.loads(posts_json)['status_updates']
         location = 'Profile'
-        media_id = 0
         post_counter = 1
         rem_comments = []
         for post in posts:
