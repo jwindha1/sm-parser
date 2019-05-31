@@ -68,7 +68,13 @@ for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SIN
     likes = post.likes
     time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
     date = post.date_local.date()
-    caption = post.caption
+    unrem = ''
+    for word in post.caption.split():
+        if word[0] is '@':
+            unrem += '{{USERNAME}} '
+        else:
+            unrem += word + ' '
+    caption = scrubadub.clean(unrem)
     comments = ''
     for comment in post.get_comments():
         unrem = ''
