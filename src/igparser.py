@@ -15,6 +15,8 @@ import pathlib
 import instaloader
 from itertools import dropwhile, takewhile
 
+months_back = 8
+days_back = months_back*30.4375
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 outbox_path = os.path.join('outbox')
 
@@ -57,40 +59,47 @@ follow_parsed = [
 genCSV(igu, 'following.csv', follow_parsed)
 
 SINCE = datetime.today()
-UNTIL = SINCE - timedelta(days=183)
+UNTIL = SINCE - timedelta(days=days_back)
 post_count = 0
 print('Parsing {0}\'s media...'.format(user_name), flush=True)
 for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
-    media_dest = os.path.join(media_root, str(post_count))
-    L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
-    post_count += 1
+    try:
+        media_dest = os.path.join(media_root, str(post_count))
+        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
+        post_count += 1
 
-    likes = post.likes
-    time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
-    date = post.date_local.date()
-    unrem = ''
-    for word in post.caption.split():
-        if word[0] is '@':
-            unrem += '{{USERNAME}} '
-        else:
-            unrem += word + ' '
-    caption = scrubadub.clean(unrem)
-    comments = ''
-    for comment in post.get_comments():
+        likes = post.likes
+        time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
+        date = post.date_local.date()
         unrem = ''
-        for word in comment[2].split():
+        for word in post.caption.split():
             if word[0] is '@':
                 unrem += '{{USERNAME}} '
             else:
                 unrem += word + ' '
-        comments += '"' + scrubadub.clean(unrem) + '", '
+        caption = scrubadub.clean(unrem)
+        comments = ''
+        for comment in post.get_comments():
+            unrem = ''
+            for word in comment[2].split():
+                if word[0] is '@':
+                    unrem += '{{USERNAME}} '
+                else:
+                    unrem += word + ' '
+            comments += '"' + scrubadub.clean(unrem) + '", '
 
-    entry = [date, time, media_dest, caption, likes, comments]
-    posts_parsed.append(entry)
+        entry = [date, time, media_dest, caption, likes, comments]
+        posts_parsed.append(entry)
+    except Exception as e:
+        print("Error parsing IG post: " + type(e).__name__ + ": {}".format(e))
+        continue
 
 print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
 for filename in os.listdir(media_root):
-    if any(filename.endswith(end) for end in supported_types):
-        cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
-
+    try:
+        if any(filename.endswith(end) for end in supported_types):
+            cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
+    except Exception as e:
+        print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
+        continue
 genCSV(igu, 'posts.csv', posts_parsed)
