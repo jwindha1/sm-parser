@@ -2,6 +2,7 @@ import zipfile
 import glob
 import os
 import os.path
+import contextlib
 import re
 import sys
 import json
@@ -12,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 import face_recognition
 import cv2
-from shutil import copyfile
+import shutil
 import pathlib
 import instaloader
 from itertools import dropwhile, takewhile
@@ -21,7 +22,10 @@ from itertools import dropwhile, takewhile
 
 months_back = 8
 days_back = months_back*30.4375
+
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
+
+offline = True if (len(sys.argv) == 2 and sys.argv[1] == 'offline') else False
 
 def blurFaces(image_path):
     img = cv2.imread(image_path)
@@ -43,29 +47,39 @@ def genCSV(folder, filename, content):
         for entry in content:
             csv_writer.writerow(entry)
 
-# Parse Facebook files
-print('Unzipping facebook data dumps...', flush=True)
-facebook_zips = glob.glob('./inbox/*_facebook.zip')
-fbz_counter = 1
-for fbz in facebook_zips:
-    print('Unzipping {0} of {1} archives...'.format(fbz_counter, len(facebook_zips)), end='\r', flush=True)
-    fbz_counter += 1
-    with zipfile.ZipFile(fbz,"r") as zip_ref:
-        zip_ref.extractall("./inbox/temp")
+def unzip(platform, temp_path):
+    print('Unzipping {0} data dumps...'.format(platform), flush=True)
+    zips = glob.glob('./inbox/*_{0}.zip'.format(platform))
+    for i, z in enumerate(zips):
+        print('Unzipping {0} of {1} archives...'.format(i+1, len(zips)), end='\r', flush=True)
+        with zipfile.ZipFile(z, "r") as zip_ref:
+            name = zip_ref.filename
+            assert(name[:8] == "./inbox/" and name[-4:] == ".zip")
+            name = name[8:-4]
+            path = "./inbox/temp/{0}".format(name)
+            zip_ref.extractall(path)
+        if os.path.isdir("{0}/{1}".format(path,name)):
+            # extracted with an extra folder
+            shutil.move(path, path+"1")  # rename parent folder
+            shutil.move("{0}/{1}".format(path+"1",name), "./inbox/temp")  # move up
+            shutil.rmtree(path+"1")  # remove parent folder
 
+    # ID extracted datasets
+    unzips = os.listdir(temp_path)
+    ig_regex = re.compile(r'.*_{0}$'.format(platform))
+    unzips = list(filter(ig_regex.search, unzips))
+    print('\nUnzipping complete!', flush=True)
+    return unzips
+
+if not os.path.isdir('./inbox/temp'): os.mkdir('./inbox/temp')
+if not os.path.isdir('./outbox'): os.mkdir('./outbox')
 temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
-
-# ID extracted datasets
-unzips = os.listdir(temp_out)
-fb_regex = re.compile(r'.*_[fF]acebook$')
-facebook_unzips = list(filter(fb_regex.search, unzips))
 
 rem_comments = []
 
 # Parse extracted Facebook datasets
-print('Unzipping complete!', flush=True)
-for fbu in facebook_unzips:
+for fbu in unzip('facebook', temp_out):
     # Get display name
     profile_path = os.path.join(temp_out, fbu, 'profile_information', 'profile_information.json')
 
@@ -101,7 +115,7 @@ for fbu in facebook_unzips:
         reactions_json = open(reactions_path).read()
         reactions = json.loads(reactions_json)['reactions']
         categories = ['photo', 'comment', 'post', 'link', 'album', 'video', 'other']
-        reactions_parsed = [['From', 'To', 'Author'] + categories]
+        reactions_parsed = [['From', 'To'] + categories]
         react_totals = defaultdict(lambda: defaultdict(int))
         start_date = end_date = False
         for reaction in reactions:
@@ -119,7 +133,7 @@ for fbu in facebook_unzips:
                         for react in react_totals[cat]:
                             tmp_cat += react + ': ' + str(react_totals[cat][react]) + ' '
                         tmp_week.append(tmp_cat)
-                    reactions_parsed.append([end_date.date(), start_date.date(), reaction['data'][0]['reaction']['actor']] + tmp_week)
+                    reactions_parsed.append([end_date.date(), start_date.date()] + tmp_week)
                     start_date = end_date = timestamp
                     react_totals = defaultdict(lambda: defaultdict(int))
                 else:
@@ -361,8 +375,7 @@ for fbu in facebook_unzips:
                         continue
                 else:
                     comment_text = ''
-                comment_author = comment['data'][0]['comment']['author']
-                comments_parsed.append([comment_date, comment_time, comment_author, comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
+                comments_parsed.append([comment_date, comment_time, 'Participant', comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
             except Exception as e:
                 print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
                 continue
@@ -409,31 +422,12 @@ for fbu in facebook_unzips:
     genCSV(fbu, 'comments.csv', comments_parsed)
 
 # Parse Instagram files
-print('Unzipping Instagram data dumps...', flush=True)
-instagram_zips = glob.glob('./inbox/*_instagram.zip')
-igz_counter = 1
-for igz in instagram_zips:
-    print('Unzipping {0} of {1} archives...'.format(igz_counter, len(instagram_zips)), end='\r', flush=True)
-    igz_counter += 1
-    with zipfile.ZipFile(igz,"r") as zip_ref:
-        zip_ref.extractall("./inbox/temp")
-
-temp_out = os.path.join('inbox', 'temp')
-outbox_path = os.path.join('outbox')
-
-# ID extracted datasets
-unzips = os.listdir(temp_out)
-ig_regex = re.compile(r'.*_[iI]nstagram$')
-instagram_unzips = list(filter(ig_regex.search, unzips))
-
-# Parse extracted Instagram datasets
-print('\nUnzipping complete!', flush=True)
-for igu in instagram_unzips:
+for igu in unzip('instagram', temp_out):
     # Get display name
     profile_path = os.path.join(temp_out, igu, 'profile.json')
-    profile_json = open(profile_path).read()
-    display_name = json.loads(profile_json)['name']
-    user_name = json.loads(profile_json)['username']
+    profile_json = json.loads(open(profile_path).read())
+    display_name = profile_json['name'] if 'name' in profile_json else ''
+    user_name = profile_json['username']
     media_root = os.path.join(outbox_path, igu, 'media')
     pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
 
@@ -473,64 +467,79 @@ for igu in instagram_unzips:
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
-    # Pull Instagram data from web
-    posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
-    L = instaloader.Instaloader()
-    user_name = input('Please enter subject\'s Instagram username: ')
-    L.interactive_login(user_name)
-    profile = instaloader.Profile.from_username(L.context, user_name)
-    posts = profile.get_posts()
+    if not offline:
+        # Pull Instagram data from web
+        posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
+        L = instaloader.Instaloader()
 
-    follow_parsed = [
-        ['Followers', 'Followees'],
-        [profile.followers, profile.followees]
-        ]
-
-    genCSV(igu, 'following.csv', follow_parsed)
-
-    SINCE = datetime.today()
-    UNTIL = SINCE - timedelta(days=days_back)
-    post_count = 0
-    print('Parsing {0}\'s media...'.format(user_name), flush=True)
-    for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
         try:
-            media_dest = os.path.join(media_root, str(post_count))
-            L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
-            post_count += 1
+            L.interactive_login(user_name)
+        except Exception as e:
+            print("Failed login with username from download: " + type(e).__name__ + ": {}".format(e))
+            user_name = input('Please enter subject\'s Instagram username: ')
+            L.interactive_login(user_name)
 
-            likes = post.likes
-            time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
-            date = post.date_local.date()
-            unrem = ''
-            for word in post.caption.split():
-                if word[0] is '@':
-                    unrem += '{{USERNAME}} '
-                else:
-                    unrem += word + ' '
-            caption = scrubadub.clean(unrem)
-            comments = ''
-            for comment in post.get_comments():
+        profile = instaloader.Profile.from_username(L.context, user_name)
+        posts = profile.get_posts()
+
+        follow_parsed = [
+            ['Followers', 'Followees'],
+            [profile.followers, profile.followees]
+            ]
+
+        genCSV(igu, 'following.csv', follow_parsed)
+
+        SINCE = datetime.today()
+        UNTIL = SINCE - timedelta(days=days_back)
+        post_count = 0
+        print('Parsing {0}\'s media...'.format(user_name), flush=True)
+        for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
+            try:
+                print('Parsing media number {0}...'.format(post_count+1), end='\r', flush=True)
+                media_dest = os.path.join(media_root, str(post_count))
+                with open(os.devnull, 'w') as devnull:  # to get rid of printing
+                    with contextlib.redirect_stdout(devnull):
+                        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
+                post_count += 1
+
+                likes = post.likes
+                time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
+                date = post.date_local.date()
                 unrem = ''
-                for word in comment[2].split():
-                    if word[0] is '@':
-                        unrem += '{{USERNAME}} '
-                    else:
-                        unrem += word + ' '
-                comments += '"' + scrubadub.clean(unrem) + '", '
+                if post.caption is not None:
+                    for word in post.caption.split():
+                        if word[0] is '@':
+                            unrem += '{{USERNAME}} '
+                        else:
+                            unrem += word + ' '
+                caption = scrubadub.clean(unrem)
+                comments = ''
+                for comment in post.get_comments():
+                    unrem = ''
+                    for word in comment[2].split():
+                        if word[0] is '@':
+                            unrem += '{{USERNAME}} '
+                        else:
+                            unrem += word + ' '
+                    comments += '"' + scrubadub.clean(unrem) + '", '
 
-            entry = [date, time, media_dest, caption, likes, comments]
-            posts_parsed.append(entry)
-        except Exception as e:
-            print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
-            continue
+                entry = [date, time, media_dest, caption, likes, comments]
+                posts_parsed.append(entry)
+            except Exception as e:
+                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
 
-    print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
-    for filename in os.listdir(media_root):
-        try:
-            if any(filename.endswith(end) for end in supported_types):
-                cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
-        except Exception as e:
-            print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
-            continue
+        print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
+        for filename in os.listdir(media_root):
+            try:
+                if any(filename.endswith(end) for end in supported_types):
+                    cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
+            except Exception as e:
+                print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
 
-    genCSV(igu, 'posts.csv', posts_parsed)
+        genCSV(igu, 'posts.csv', posts_parsed)
+
+print('Cleaning up...')
+shutil.rmtree('./inbox/temp')
+print('Done!')
