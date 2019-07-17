@@ -17,6 +17,7 @@ import shutil
 import pathlib
 import instaloader
 from itertools import dropwhile, takewhile
+from operator import itemgetter
 
 # variables
 
@@ -27,7 +28,7 @@ supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
 offline = True if (len(sys.argv) == 2 and sys.argv[1] == 'offline') else False
 
-def blurFaces(image_path):
+def blur_faces(image_path):
     img = cv2.imread(image_path)
     faces = face_recognition.face_locations(img)
 
@@ -208,7 +209,7 @@ for fbu in unzip('facebook', temp_out):
                         if file_extension in supported_types:
                             media_id += 1
                             media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
-                            cv2.imwrite(media_dest, blurFaces(media_src))
+                            cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
             except Exception as e:
@@ -285,7 +286,7 @@ for fbu in unzip('facebook', temp_out):
     #                 if file_extension in supported_types:
     #                     media_id += 1
     #                     media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
-    #                     cv2.imwrite(media_dest, blurFaces(media_src))
+    #                     cv2.imwrite(media_dest, blur_faces(media_src))
     #                 entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
     #                 posts_parsed.append(entry)
 
@@ -340,7 +341,7 @@ for fbu in unzip('facebook', temp_out):
                         if file_extension in supported_types:
                             media_id += 1
                             media_dest = os.path.join(media_root, '{0}{1}'.format(media_id, file_extension))
-                            cv2.imwrite(media_dest, blurFaces(media_src))
+                            cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
             except Exception as e:
@@ -371,10 +372,8 @@ for fbu in unzip('facebook', temp_out):
                 if 'comment' in comment['data'][0]['comment']:
                     if comment['data'][0]['comment']['comment'] not in rem_comments:
                         comment_text = scrubadub.clean(comment['data'][0]['comment']['comment'])
-                    else:
-                        continue
-                else:
-                    comment_text = ''
+                    else: continue
+                else: comment_text = ''
                 comments_parsed.append([comment_date, comment_time, 'Participant', comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
             except Exception as e:
                 print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
@@ -467,7 +466,91 @@ for igu in unzip('instagram', temp_out):
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
-    if not offline:
+    # Parse followers / followees counts
+    connections_path = os.path.join(temp_out, igu, 'connections.json')
+    connections_json = open(connections_path, encoding='utf8').read()
+    connections = json.loads(connections_json)
+
+    follow_parsed = [
+        ['Followers', 'Followees'],
+        [len(connections['followers']), len(connections['following'])]
+        ]
+
+    genCSV(igu, 'following.csv', follow_parsed)
+
+    if offline:
+        # Parse posts
+        posts_path = os.path.join(temp_out, igu, 'media.json')
+        posts_json = json.loads(open(posts_path, encoding='utf8').read())
+        posts = posts_json['photos']
+        videos = posts_json['videos']
+
+        post_counter = 1
+        media_id = 0
+        posts_parsed = [['Date', 'Time', 'Media', 'Caption']]
+        unique_post_timestamps = {}  # timestamp -> [media_subroot, num pics in post]
+        for i, post in enumerate(posts):
+            try:
+                print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), end='\r', flush=True)
+                # Parse timestamp
+                timestamp = datetime.strptime(post['taken_at'], '%Y-%m-%dT%H:%M:%S')
+                media_subroot = None
+                num_pics_in_post = 0
+                if timestamp in unique_post_timestamps:
+                    # another photo from a previously parsed post (already within time range)
+                    info = unique_post_timestamps[timestamp]
+                    media_subroot = info[0]
+                    info[1] += 1  # adding a pic to the directory
+                    num_pics_in_post = info[1]
+
+                if media_subroot is None: # first photo for a post
+                    if timestamp < datetime.now()-timedelta(days=days_back):
+                        continue
+                    post_date = timestamp.date()
+                    post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+                    # add directory to media folder for this post
+                    media_subroot = os.path.join(media_root, str(post_counter))
+                    num_pics_in_post = 1
+                    pathlib.Path(media_subroot).mkdir(parents=True, exist_ok=True)
+                    unique_post_timestamps[timestamp] = [media_subroot, num_pics_in_post]
+                    post_counter += 1
+                    # Parse text
+                    caption = scrubadub.clean(post['caption'])
+                    entry = [post_date, post_time, media_subroot, caption.encode('latin1', 'ignore').decode('utf8')]
+                    posts_parsed.append(entry)
+
+                # Parse photo
+                media = post['path']
+                media_src = os.path.join(temp_out, igu, media)
+                filename, file_extension = os.path.splitext(media)
+                media_subdest = 'N/A'
+                media_id = chr(97 - 1 + num_pics_in_post)
+                if file_extension in supported_types:
+                    media_subdest = os.path.join(media_subroot, '{0}{1}'.format(str(post_counter-1)+media_id, file_extension))
+                    cv2.imwrite(media_subdest, blur_faces(media_src))
+
+            except Exception as e:
+                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
+
+        # add text content of videos
+        for i, video in enumerate(videos):
+            print('Parsing {0} of {1} videos...'.format(i+1, len(videos)), end='\r', flush=True)
+            if video['taken_at'] not in unique_post_timestamps:  # make new row
+                timestamp = datetime.strptime(video['taken_at'], '%Y-%m-%dT%H:%M:%S')
+                if timestamp < datetime.now()-timedelta(days=days_back):
+                    continue
+                video_date = timestamp.date()
+                video_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+                caption = scrubadub.clean(video['caption'])
+                entry = [video_date, video_time, '', caption.encode('latin-1', 'ignore').decode('utf8')]
+                posts_parsed.append(entry)
+
+        # sort posts by timestamp
+        posts_parsed[1:] = sorted(posts_parsed[1:], key=itemgetter(0,1), reverse=True)
+        genCSV(igu, 'posts.csv', posts_parsed)
+
+    else:  # not offline, i.e. online
         # Pull Instagram data from web
         posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
         L = instaloader.Instaloader()
@@ -482,25 +565,35 @@ for igu in unzip('instagram', temp_out):
         profile = instaloader.Profile.from_username(L.context, user_name)
         posts = profile.get_posts()
 
-        follow_parsed = [
-            ['Followers', 'Followees'],
-            [profile.followers, profile.followees]
-            ]
-
-        genCSV(igu, 'following.csv', follow_parsed)
-
         SINCE = datetime.today()
         UNTIL = SINCE - timedelta(days=days_back)
-        post_count = 0
-        print('Parsing {0}\'s media...'.format(user_name), flush=True)
+        post_counter = 1
+        print('Parsing {0}\'s media...'.format(display_name), flush=True)
         for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
             try:
-                print('Parsing media number {0}...'.format(post_count+1), end='\r', flush=True)
-                media_dest = os.path.join(media_root, str(post_count))
-                with open(os.devnull, 'w') as devnull:  # to get rid of printing
-                    with contextlib.redirect_stdout(devnull):
-                        L.download_pic(media_dest, post.url, post.date, filename_suffix=None)
-                post_count += 1
+                print('Parsing media number {0}...'.format(post_counter+1), end='\r', flush=True)
+                media_subroot = ''  # in case it's a video
+                if post.typename == 'GraphSidecar' or post.typename == 'GraphImage':  # not video
+                    media_subroot = os.path.join(media_root, str(post_counter))
+                    pathlib.Path(media_subroot).mkdir(parents=True, exist_ok=True)
+                    char_count = 97  # start at 'a'
+
+                    if post.typename == 'GraphSidecar':
+                        for n in post.get_sidecar_nodes():
+                            if n.is_video: continue
+                            media_subdest = os.path.join(media_subroot, str(post_counter)+chr(char_count))
+                            with open(os.devnull, 'w') as devnull:  # to get rid of printing
+                                with contextlib.redirect_stdout(devnull):
+                                    L.download_pic(media_subdest, n.display_url, post.date, filename_suffix=None)
+                            char_count += 1
+
+                    elif post.typename == 'GraphImage':
+                        media_subdest = os.path.join(media_subroot, str(post_counter)+chr(char_count))
+                        with open(os.devnull, 'w') as devnull:  # to get rid of printing
+                            with contextlib.redirect_stdout(devnull):
+                                L.download_pic(media_subdest, post.url, post.date, filename_suffix=None)
+
+                    post_counter += 1
 
                 likes = post.likes
                 time = post.date_local.strftime("%#I:%M %p") if platform.system() == 'Windows' else post.date_local.strftime("%-I:%M %p")
@@ -523,23 +616,24 @@ for igu in unzip('instagram', temp_out):
                             unrem += word + ' '
                     comments += '"' + scrubadub.clean(unrem) + '", '
 
-                entry = [date, time, media_dest, caption, likes, comments]
+                entry = [date, time, media_subroot, caption, likes, comments]
                 posts_parsed.append(entry)
             except Exception as e:
                 print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
                 continue
 
-        print('Scrubbing {0}\'s media...'.format(user_name), flush=True)
-        for filename in os.listdir(media_root):
+        print('Scrubbing {0}\'s media...'.format(display_name), flush=True)
+        media_files = [f for f in glob.glob('./outbox/{0}_instagram/media/*/*'.format(user_name), recursive=True)]
+        for filename in media_files:
             try:
                 if any(filename.endswith(end) for end in supported_types):
-                    cv2.imwrite(os.path.join(media_root, filename), blurFaces(os.path.join(media_root, filename)))
+                    cv2.imwrite(filename, blur_faces(filename))
             except Exception as e:
                 print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
                 continue
 
         genCSV(igu, 'posts.csv', posts_parsed)
 
-print('Cleaning up...')
+print('Cleaning up the temp folder...')
 shutil.rmtree('./inbox/temp')
 print('Done!')
