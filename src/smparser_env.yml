@@ -34,6 +34,7 @@ dependencies:
     - opencv-python==4.1.0.25
     - phonenumbers==8.10.14
     - pillow==6.1.0
+    - pytz==2019.1
     - requests==2.22.0
     - scrubadub==1.2.0
     - six==1.12.0

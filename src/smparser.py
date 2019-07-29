@@ -18,11 +18,7 @@ import pathlib
 import instaloader
 from itertools import dropwhile, takewhile
 from operator import itemgetter
-
-# variables
-
-months_back = 8
-days_back = months_back*30.4375
+import re
 
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
@@ -64,13 +60,35 @@ def unzip(platform, temp_path):
             shutil.move(path, path+"1")  # rename parent folder
             shutil.move("{0}/{1}".format(path+"1",name), "./inbox/temp")  # move up
             shutil.rmtree(path+"1")  # remove parent folder
-
-    # ID extracted datasets
+    # ID extracted dataset
     unzips = os.listdir(temp_path)
     ig_regex = re.compile(r'.*_{0}$'.format(platform))
     unzips = list(filter(ig_regex.search, unzips))
     print('\nUnzipping complete!', flush=True)
     return unzips
+
+def ask_date():
+    month_match = re.compile(r"^(\d|\d{2})$")
+    months_back = input("How many months back? Enter a 1 or 2 digit number, then press enter: ").strip()
+    while month_match.match(months_back) is None:
+        months_back = input("Please enter a valid 1 or 2 digit number, then press enter: ").strip()
+
+    date_match = re.compile(r"(^\d{4}-([0]\d|1[0-2])-([0-2]\d|3[01])$|^today$)")
+    date_string = input("Parse within {0} month(s) of what date? \"today\" or YYYY-MM-DD, then press enter: ".format(months_back)).strip()
+    while date_match.match(date_string) is None:
+        date_string = input("Please enter in the proper format (\"today\" or YYYY-MM-DD), then press enter: ").strip()
+    timestamp = datetime.today()
+    if date_string != "today":
+        yr_mo_day = [int(x) for x in date_string.split("-")]
+        timestamp = datetime(yr_mo_day[0], yr_mo_day[1], yr_mo_day[2])
+    if datetime.today() < timestamp:
+        print("Error: date entered is in the future. Let's try again.")
+        months_back, timestamp = ask_date()
+
+    return int(months_back), timestamp
+
+def out_of_range(curr, months_back, last_date):
+    return (last_date-timedelta(days=months_back*30.4375) >= curr or curr > last_date)
 
 if not os.path.isdir('./inbox/temp'): os.mkdir('./inbox/temp')
 if not os.path.isdir('./outbox'): os.mkdir('./outbox')
@@ -83,11 +101,14 @@ rem_comments = []
 for fbu in unzip('facebook', temp_out):
     # Get display name
     profile_path = os.path.join(temp_out, fbu, 'profile_information', 'profile_information.json')
-
     display_name = fbu
+
     if os.path.isfile(profile_path):
         profile_json = open(profile_path).read()
         display_name = json.loads(profile_json)['profile']['name']['full_name']
+
+    print('Parsing {0}\'s Facebook...'.format(display_name), flush=True)
+    months_back, last_date = ask_date()
 
     print('Parsing {0}\'s friends...'.format(display_name), flush=True)
     # Parse friends
@@ -120,11 +141,10 @@ for fbu in unzip('facebook', temp_out):
         react_totals = defaultdict(lambda: defaultdict(int))
         start_date = end_date = False
         for reaction in reactions:
-            try:
-                if datetime.fromtimestamp(reaction['timestamp']) < datetime.now()-timedelta(days=days_back):
-                    continue
+            # # try:
+                timestamp = datetime.fromtimestamp(reaction['timestamp'])
+                if out_of_range(timestamp, months_back, last_date): continue
                 # Extract reaction details
-                timestamp = datetime.fromtimestamp(reaction['timestamp'], timezone.utc)
                 if not start_date or not end_date:
                     start_date = end_date = timestamp
                 if(abs((start_date - timestamp).days) > 7):
@@ -142,9 +162,9 @@ for fbu in unzip('facebook', temp_out):
 
                 category = next((cat for cat in categories if cat in reaction['title']), 'other')
                 react_totals[category][reaction['data'][0]['reaction']['reaction']] += 1
-            except Exception as e:
-                print("Error parsing FB reaction: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing FB reaction: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
         genCSV(fbu, 'reactions.csv', reactions_parsed)
 
@@ -164,13 +184,12 @@ for fbu in unzip('facebook', temp_out):
         post_counter = 1
         rem_comments = []
         for post in posts:
-            try:
+            # try:
                 print('Parsing {0} of {1} posts...'.format(post_counter, len(posts)), end='\r', flush=True)
                 post_counter += 1
                 # Extract comment details
-                # if datetime.fromtimestamp(post['timestamp']) < datetime.now()-timedelta(days=days_back):
-                #     continue
-                timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
+                timestamp = datetime.fromtimestamp(post['timestamp'])
+                if out_of_range(timestamp, months_back, last_date): continue
                 post_date = timestamp.date()
                 post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                 if 'data' in post:
@@ -212,9 +231,9 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
-            except Exception as e:
-                print("Error parsing FB post: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing FB post: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
     # Parse group posts
     # print('Parsing {0}\'s group posts...'.format(display_name), flush=True)
@@ -232,7 +251,7 @@ for fbu in unzip('facebook', temp_out):
     #         print('Parsing {0} of {1} group posts...'.format(post_counter, len(posts)), end='\r', flush=True)
     #         post_counter += 1
     #         # Extract comment details
-    #         if datetime.fromtimestamp(post['timestamp']) < datetime.now()-timedelta(days=days_back):
+    #         if datetime.fromtimestamp(post['timestamp']) < datetime.fromisoformat(date_string):
     #             continue
     #         timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
     #         post_date = timestamp.date()
@@ -300,13 +319,12 @@ for fbu in unzip('facebook', temp_out):
         post_counter = 1
         rem_comments = []
         for post in posts:
-            try:
+            # try:
                 print('Parsing {0} of {1} updates...'.format(post_counter, len(posts)), end='\r', flush=True)
                 post_counter += 1
                 # Extract comment details
-                if datetime.fromtimestamp(post['timestamp']) < datetime.now()-timedelta(days=days_back):
-                    continue
-                timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
+                timestamp = datetime.fromtimestamp(post['timestamp'])
+                if out_of_range(timestamp, months_back, last_date): continue
                 post_date = timestamp.date()
                 post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                 if 'title' in post:
@@ -344,9 +362,9 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
-            except Exception as e:
-                print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
+            #     continue
     # print("Found posts: -=-==--=-==-=-")
     # print(found_posts)
     # print(posts_parsed)
@@ -361,11 +379,10 @@ for fbu in unzip('facebook', temp_out):
         comments_json = open(comments_path).read()
         comments = json.loads(comments_json)['comments']
         for comment in comments:
-            # if datetime.fromtimestamp(comment['timestamp']) < datetime.now()-timedelta(days=days_back):
-            #     continue
             # Extract comment details
-            try:
-                timestamp = datetime.fromtimestamp(comment['timestamp'], timezone.utc)
+            # try:
+                timestamp = datetime.fromtimestamp(comment['timestamp'])
+                if out_of_range(timestamp, months_back, last_date): continue
                 comment_date = timestamp.date()
                 comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                 comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
@@ -375,9 +392,9 @@ for fbu in unzip('facebook', temp_out):
                     else: continue
                 else: comment_text = ''
                 comments_parsed.append([comment_date, comment_time, 'Participant', comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
-            except Exception as e:
-                print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
     timeline_path = os.path.join(temp_out, fbu, 'posts', 'other_people\'s_posts_to_your_timeline.json')
     if os.path.isfile(timeline_path):
@@ -385,12 +402,10 @@ for fbu in unzip('facebook', temp_out):
         timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
         # print(timeline)
         for timeline_post in timeline['activity_log_data']:
-            try:
-                # print(timeline_post)
-                if datetime.fromtimestamp(timeline_post['timestamp']) < datetime.now()-timedelta(days=days_back):
-                    continue
+            # try:
                 # Extract comment details
-                timestamp = datetime.fromtimestamp(timeline_post['timestamp'], timezone.utc)
+                timestamp = datetime.fromtimestamp(timeline_post['timestamp'])
+                if out_of_range(timestamp, months_back, last_date): continue
                 timeline_post_date = timestamp.date()
                 timeline_post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
 
@@ -414,9 +429,9 @@ for fbu in unzip('facebook', temp_out):
                     comment_text = timeline_post['data'][0]['post']
 
                 comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
-            except Exception as e:
-                print("Error parsing FB timeline post: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing FB timeline post: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
     genCSV(fbu, 'comments.csv', comments_parsed)
 
@@ -430,6 +445,9 @@ for igu in unzip('instagram', temp_out):
     media_root = os.path.join(outbox_path, igu, 'media')
     pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
 
+    print('Parsing {0}\'s Instagram...'.format(display_name), flush=True)
+    months_back, last_date = ask_date()
+
     # Parse comments
     print('Parsing {0}\'s comments...'.format(display_name), flush=True)
     comments_path = os.path.join(temp_out, igu, 'comments.json')
@@ -438,10 +456,9 @@ for igu in unzip('instagram', temp_out):
     comments_parsed = [['Date', 'Time', 'Subject\'s Photo', 'Friend\'s Photo']]
     for comment_sections in comments:
         for comment in comments[comment_sections]:
-            try:
+            # try:
                 timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
-                if timestamp < datetime.now()-timedelta(days=days_back):
-                    continue
+                if out_of_range(timestamp, months_back, last_date): continue
                 post_date = timestamp.date()
                 post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                 content = scrubadub.clean(comment[1])
@@ -460,9 +477,9 @@ for igu in unzip('instagram', temp_out):
                 else:
                     friend_comment = content
                 comments_parsed.append([post_date, post_time, subject_comment, friend_comment])
-            except Exception as e:
-                print("Error parsing IG comment: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing IG comment: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
@@ -490,7 +507,7 @@ for igu in unzip('instagram', temp_out):
         posts_parsed = [['Date', 'Time', 'Media', 'Caption']]
         unique_post_timestamps = {}  # timestamp -> [media_subroot, num pics in post]
         for i, post in enumerate(posts):
-            try:
+            # try:
                 print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), end='\r', flush=True)
                 # Parse timestamp
                 timestamp = datetime.strptime(post['taken_at'], '%Y-%m-%dT%H:%M:%S')
@@ -504,8 +521,7 @@ for igu in unzip('instagram', temp_out):
                     num_pics_in_post = info[1]
 
                 if media_subroot is None: # first photo for a post
-                    if timestamp < datetime.now()-timedelta(days=days_back):
-                        continue
+                    if out_of_range(timestamp, months_back, last_date): continue
                     post_date = timestamp.date()
                     post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                     # add directory to media folder for this post
@@ -529,17 +545,16 @@ for igu in unzip('instagram', temp_out):
                     media_subdest = os.path.join(media_subroot, '{0}{1}'.format(str(post_counter-1)+media_id, file_extension))
                     cv2.imwrite(media_subdest, blur_faces(media_src))
 
-            except Exception as e:
-                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
         # add text content of videos
         for i, video in enumerate(videos):
             print('Parsing {0} of {1} videos...'.format(i+1, len(videos)), end='\r', flush=True)
             if video['taken_at'] not in unique_post_timestamps:  # make new row
                 timestamp = datetime.strptime(video['taken_at'], '%Y-%m-%dT%H:%M:%S')
-                if timestamp < datetime.now()-timedelta(days=days_back):
-                    continue
+                if out_of_range(timestamp, months_back, last_date): continue
                 video_date = timestamp.date()
                 video_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
                 caption = scrubadub.clean(video['caption'])
@@ -555,22 +570,20 @@ for igu in unzip('instagram', temp_out):
         posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
         L = instaloader.Instaloader()
 
-        try:
-            L.interactive_login(user_name)
-        except Exception as e:
-            print("Failed login with username from download: " + type(e).__name__ + ": {}".format(e))
-            user_name = input('Please enter subject\'s Instagram username: ')
-            L.interactive_login(user_name)
+        # try:
+        L.interactive_login(user_name)
+        # except Exception as e:
+        #     print("Failed login with username from download: " + type(e).__name__ + ": {}".format(e))
+        #     user_name = input('Please enter subject\'s Instagram username: ')
+        #     L.interactive_login(user_name)
 
         profile = instaloader.Profile.from_username(L.context, user_name)
         posts = profile.get_posts()
 
-        SINCE = datetime.today()
-        UNTIL = SINCE - timedelta(days=days_back)
         post_counter = 1
         print('Parsing {0}\'s media...'.format(display_name), flush=True)
-        for post in takewhile(lambda p: p.date > UNTIL, dropwhile(lambda p: p.date > SINCE, posts)):
-            try:
+        for post in dropwhile(lambda p: out_of_range(p.date, months_back, last_date), posts):
+            # try:
                 print('Parsing media number {0}...'.format(post_counter+1), end='\r', flush=True)
                 media_subroot = ''  # in case it's a video
                 if post.typename == 'GraphSidecar' or post.typename == 'GraphImage':  # not video
@@ -618,19 +631,19 @@ for igu in unzip('instagram', temp_out):
 
                 entry = [date, time, media_subroot, caption, likes, comments]
                 posts_parsed.append(entry)
-            except Exception as e:
-                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
         print('Scrubbing {0}\'s media...'.format(display_name), flush=True)
         media_files = [f for f in glob.glob('./outbox/{0}_instagram/media/*/*'.format(user_name), recursive=True)]
         for filename in media_files:
-            try:
+            # try:
                 if any(filename.endswith(end) for end in supported_types):
                     cv2.imwrite(filename, blur_faces(filename))
-            except Exception as e:
-                print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
-                continue
+            # except Exception as e:
+            #     print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
+            #     continue
 
         genCSV(igu, 'posts.csv', posts_parsed)
 
