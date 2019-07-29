@@ -141,7 +141,7 @@ for fbu in unzip('facebook', temp_out):
         react_totals = defaultdict(lambda: defaultdict(int))
         start_date = end_date = False
         for reaction in reactions:
-            # # try:
+            try:
                 timestamp = datetime.fromtimestamp(reaction['timestamp'])
                 if out_of_range(timestamp, months_back, last_date): continue
                 # Extract reaction details
@@ -162,9 +162,9 @@ for fbu in unzip('facebook', temp_out):
 
                 category = next((cat for cat in categories if cat in reaction['title']), 'other')
                 react_totals[category][reaction['data'][0]['reaction']['reaction']] += 1
-            # except Exception as e:
-            #     print("Error parsing FB reaction: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing FB reaction: " + type(e).__name__ + ": {}".format(e))
+                continue
 
         genCSV(fbu, 'reactions.csv', reactions_parsed)
 
@@ -184,7 +184,7 @@ for fbu in unzip('facebook', temp_out):
         post_counter = 1
         rem_comments = []
         for post in posts:
-            # try:
+            try:
                 print('Parsing {0} of {1} posts...'.format(post_counter, len(posts)), end='\r', flush=True)
                 post_counter += 1
                 # Extract comment details
@@ -231,9 +231,9 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
-            # except Exception as e:
-            #     print("Error parsing FB post: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing FB post: " + type(e).__name__ + ": {}".format(e))
+                continue
 
     # Parse group posts
     # print('Parsing {0}\'s group posts...'.format(display_name), flush=True)
@@ -319,7 +319,7 @@ for fbu in unzip('facebook', temp_out):
         post_counter = 1
         rem_comments = []
         for post in posts:
-            # try:
+            try:
                 print('Parsing {0} of {1} updates...'.format(post_counter, len(posts)), end='\r', flush=True)
                 post_counter += 1
                 # Extract comment details
@@ -362,12 +362,10 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
-            # except Exception as e:
-            #     print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
-            #     continue
-    # print("Found posts: -=-==--=-==-=-")
-    # print(found_posts)
-    # print(posts_parsed)
+            except Exception as e:
+                print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
+                continue
+
     if found_posts > 0:
         genCSV(fbu, 'posts.csv', posts_parsed)
 
@@ -380,7 +378,7 @@ for fbu in unzip('facebook', temp_out):
         comments = json.loads(comments_json)['comments']
         for comment in comments:
             # Extract comment details
-            # try:
+            try:
                 timestamp = datetime.fromtimestamp(comment['timestamp'])
                 if out_of_range(timestamp, months_back, last_date): continue
                 comment_date = timestamp.date()
@@ -392,9 +390,9 @@ for fbu in unzip('facebook', temp_out):
                     else: continue
                 else: comment_text = ''
                 comments_parsed.append([comment_date, comment_time, 'Participant', comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
-            # except Exception as e:
-            #     print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
+                continue
 
     timeline_path = os.path.join(temp_out, fbu, 'posts', 'other_people\'s_posts_to_your_timeline.json')
     if os.path.isfile(timeline_path):
@@ -402,7 +400,7 @@ for fbu in unzip('facebook', temp_out):
         timeline = json.loads(timeline_json)['wall_posts_sent_to_you']
         # print(timeline)
         for timeline_post in timeline['activity_log_data']:
-            # try:
+            try:
                 # Extract comment details
                 timestamp = datetime.fromtimestamp(timeline_post['timestamp'])
                 if out_of_range(timestamp, months_back, last_date): continue
@@ -429,9 +427,9 @@ for fbu in unzip('facebook', temp_out):
                     comment_text = timeline_post['data'][0]['post']
 
                 comments_parsed.append([timeline_post_date, timeline_post_time, 'Friend', comment_text.encode('latin1').decode('utf8'), attachment])
-            # except Exception as e:
-            #     print("Error parsing FB timeline post: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing FB timeline post: " + type(e).__name__ + ": {}".format(e))
+                continue
 
     genCSV(fbu, 'comments.csv', comments_parsed)
 
@@ -456,7 +454,7 @@ for igu in unzip('instagram', temp_out):
     comments_parsed = [['Date', 'Time', 'Subject\'s Photo', 'Friend\'s Photo']]
     for comment_sections in comments:
         for comment in comments[comment_sections]:
-            # try:
+            try:
                 timestamp = datetime.strptime(comment[0], '%Y-%m-%dT%H:%M:%S')
                 if out_of_range(timestamp, months_back, last_date): continue
                 post_date = timestamp.date()
@@ -477,9 +475,9 @@ for igu in unzip('instagram', temp_out):
                 else:
                     friend_comment = content
                 comments_parsed.append([post_date, post_time, subject_comment, friend_comment])
-            # except Exception as e:
-            #     print("Error parsing IG comment: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing IG comment: " + type(e).__name__ + ": {}".format(e))
+                continue
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
@@ -507,7 +505,7 @@ for igu in unzip('instagram', temp_out):
         posts_parsed = [['Date', 'Time', 'Media', 'Caption']]
         unique_post_timestamps = {}  # timestamp -> [media_subroot, num pics in post]
         for i, post in enumerate(posts):
-            # try:
+            try:
                 print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), end='\r', flush=True)
                 # Parse timestamp
                 timestamp = datetime.strptime(post['taken_at'], '%Y-%m-%dT%H:%M:%S')
@@ -545,9 +543,9 @@ for igu in unzip('instagram', temp_out):
                     media_subdest = os.path.join(media_subroot, '{0}{1}'.format(str(post_counter-1)+media_id, file_extension))
                     cv2.imwrite(media_subdest, blur_faces(media_src))
 
-            # except Exception as e:
-            #     print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
 
         # add text content of videos
         for i, video in enumerate(videos):
@@ -570,20 +568,21 @@ for igu in unzip('instagram', temp_out):
         posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
         L = instaloader.Instaloader()
 
-        # try:
-        L.interactive_login(user_name)
-        # except Exception as e:
-        #     print("Failed login with username from download: " + type(e).__name__ + ": {}".format(e))
-        #     user_name = input('Please enter subject\'s Instagram username: ')
-        #     L.interactive_login(user_name)
+        try:
+            L.interactive_login(user_name)
+        except Exception as e:
+            print("Failed login with username from download: " + type(e).__name__ + ": {}".format(e))
+            user_name = input('Please enter subject\'s Instagram username: ')
+            L.interactive_login(user_name)
 
         profile = instaloader.Profile.from_username(L.context, user_name)
         posts = profile.get_posts()
 
         post_counter = 1
         print('Parsing {0}\'s media...'.format(display_name), flush=True)
-        for post in dropwhile(lambda p: out_of_range(p.date, months_back, last_date), posts):
-            # try:
+        for post in posts:
+            try:
+                if out_of_range(post.date, months_back, last_date): continue
                 print('Parsing media number {0}...'.format(post_counter+1), end='\r', flush=True)
                 media_subroot = ''  # in case it's a video
                 if post.typename == 'GraphSidecar' or post.typename == 'GraphImage':  # not video
@@ -631,19 +630,19 @@ for igu in unzip('instagram', temp_out):
 
                 entry = [date, time, media_subroot, caption, likes, comments]
                 posts_parsed.append(entry)
-            # except Exception as e:
-            #     print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
 
         print('Scrubbing {0}\'s media...'.format(display_name), flush=True)
         media_files = [f for f in glob.glob('./outbox/{0}_instagram/media/*/*'.format(user_name), recursive=True)]
         for filename in media_files:
-            # try:
+            try:
                 if any(filename.endswith(end) for end in supported_types):
                     cv2.imwrite(filename, blur_faces(filename))
-            # except Exception as e:
-            #     print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
-            #     continue
+            except Exception as e:
+                print("Error scrubbing IG media: " + type(e).__name__ + ": {}".format(e))
+                continue
 
         genCSV(igu, 'posts.csv', posts_parsed)
 
