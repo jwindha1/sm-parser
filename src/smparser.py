@@ -128,16 +128,16 @@ for fbu in unzip('facebook', temp_out):
         else:
             friends_parsed.append([num_friends, 0])
 
-        genCSV(fbu, 'friends.csv', friends_parsed)
+    genCSV(fbu, 'friends.csv', friends_parsed)
 
     # Parse reactions
     print('Parsing {0}\'s reactions...'.format(display_name), flush=True)
     reactions_path = os.path.join(temp_out, fbu, 'likes_and_reactions', 'posts_and_comments.json')
+    categories = ['photo', 'comment', 'post', 'link', 'album', 'video', 'other']
+    reactions_parsed = [['From', 'To'] + categories]
     if os.path.isfile(reactions_path):
         reactions_json = open(reactions_path).read()
         reactions = json.loads(reactions_json)['reactions']
-        categories = ['photo', 'comment', 'post', 'link', 'album', 'video', 'other']
-        reactions_parsed = [['From', 'To'] + categories]
         react_totals = defaultdict(lambda: defaultdict(int))
         start_date = end_date = False
         for reaction in reactions:
@@ -166,18 +166,16 @@ for fbu in unzip('facebook', temp_out):
                 print("Error parsing FB reaction: " + type(e).__name__ + ": {}".format(e))
                 continue
 
-        genCSV(fbu, 'reactions.csv', reactions_parsed)
+    genCSV(fbu, 'reactions.csv', reactions_parsed)
 
     # Parse posts
     print('Parsing {0}\'s posts...'.format(display_name), flush=True)
-    found_posts = 0
     posts_parsed = [['Date', 'Time', 'Location', 'Post', 'Caption', 'Friend Comments', 'Subject Comments']]
     media_root = os.path.join(outbox_path, fbu, 'media')
     pathlib.Path(media_root).mkdir(parents=True, exist_ok=True)
     posts_path = os.path.join(temp_out, fbu, 'posts', 'your_posts_1.json')
     media_id = 0
     if os.path.isfile(posts_path):
-        found_posts += 1
         posts_json = open(posts_path).read()
         posts = json.loads(posts_json)
         location = 'Profile'
@@ -313,7 +311,6 @@ for fbu in unzip('facebook', temp_out):
     print('Parsing {0}\'s profile updates...'.format(display_name), flush=True)
     posts_path = os.path.join(temp_out, fbu, 'profile_information', 'profile_update_history.json')
     if os.path.isfile(posts_path):
-        found_posts += 1
         posts_json = open(posts_path).read()
         posts = json.loads(posts_json)['profile_updates']
         post_counter = 1
@@ -366,8 +363,7 @@ for fbu in unzip('facebook', temp_out):
                 print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
                 continue
 
-    if found_posts > 0:
-        genCSV(fbu, 'posts.csv', posts_parsed)
+    genCSV(fbu, 'posts.csv', posts_parsed)
 
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
