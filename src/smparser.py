@@ -19,6 +19,8 @@ import instaloader
 from itertools import dropwhile, takewhile
 from operator import itemgetter
 import re
+import nltk
+nltk.download("punkt")
 
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
@@ -27,12 +29,10 @@ offline = True if (len(sys.argv) == 2 and sys.argv[1] == 'offline') else False
 def blur_faces(image_path):
     img = cv2.imread(image_path)
     faces = face_recognition.face_locations(img)
-
     for (top, right, bottom, left) in faces:
         face_image = img[top:bottom, left:right]
         face_image = cv2.GaussianBlur(face_image, (99, 99), 30)
         img[top:bottom, left:right] = face_image
-
     return img
 
 def genCSV(folder, filename, content):
@@ -84,7 +84,6 @@ def ask_date():
     if datetime.today() < timestamp:
         print("Error: date entered is in the future. Let's try again.")
         months_back, timestamp = ask_date()
-
     return int(months_back), timestamp
 
 def out_of_range(curr, months_back, last_date):
@@ -96,6 +95,11 @@ temp_out = os.path.join('inbox', 'temp')
 outbox_path = os.path.join('outbox')
 
 rem_comments = []
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= BEGIN =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= FACEBOOK =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
 # Parse extracted Facebook datasets
 for fbu in unzip('facebook', temp_out):
@@ -109,6 +113,8 @@ for fbu in unzip('facebook', temp_out):
 
     print('Parsing {0}\'s Facebook...'.format(display_name), flush=True)
     months_back, last_date = ask_date()
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= FB FRIENDS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     print('Parsing {0}\'s friends...'.format(display_name), flush=True)
     # Parse friends
@@ -129,6 +135,8 @@ for fbu in unzip('facebook', temp_out):
             friends_parsed.append([num_friends, 0])
 
     genCSV(fbu, 'friends.csv', friends_parsed)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-= FB REACTIONS =-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     # Parse reactions
     print('Parsing {0}\'s reactions...'.format(display_name), flush=True)
@@ -167,6 +175,8 @@ for fbu in unzip('facebook', temp_out):
                 continue
 
     genCSV(fbu, 'reactions.csv', reactions_parsed)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= FB POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     # Parse posts
     print('Parsing {0}\'s posts...'.format(display_name), flush=True)
@@ -233,6 +243,8 @@ for fbu in unzip('facebook', temp_out):
                 print("Error parsing FB post: " + type(e).__name__ + ": {}".format(e))
                 continue
 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-= FB GROUP POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
     # Parse group posts
     # print('Parsing {0}\'s group posts...'.format(display_name), flush=True)
     # posts_path = os.path.join(temp_out, fbu, 'groups', 'your_group_membership_activity.json')
@@ -254,7 +266,6 @@ for fbu in unzip('facebook', temp_out):
     #         timestamp = datetime.fromtimestamp(post['timestamp'], timezone.utc)
     #         post_date = timestamp.date()
     #         post_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-
     #         subject_comments = ''
     #         location = 'Group'
     #         caption = ''
@@ -271,7 +282,6 @@ for fbu in unzip('facebook', temp_out):
     #                 location = post['title'].split(' in ',1)[1]
     #         else:
     #             continue
-
     #         if 'attachments' not in post:
     #             entry = [post_date, post_time, location, media_dest, caption, '', subject_comments]
     #             posts_parsed.append(entry)
@@ -296,7 +306,6 @@ for fbu in unzip('facebook', temp_out):
     #                             rem_comments.append(comment['comment'])
     #                         else:
     #                             friend_comments += '"' + scrubadub.clean(comment['comment']) + '", '
-
     #                 scrubadub.clean(caption)
     #                 media_src = os.path.join(temp_out, fbu, media)
     #                 filename, file_extension = os.path.splitext(media)
@@ -306,6 +315,8 @@ for fbu in unzip('facebook', temp_out):
     #                     cv2.imwrite(media_dest, blur_faces(media_src))
     #                 entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
     #                 posts_parsed.append(entry)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-= FB PROFILE UPDATES =-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     # Parse profile update posts
     print('Parsing {0}\'s profile updates...'.format(display_name), flush=True)
@@ -365,6 +376,8 @@ for fbu in unzip('facebook', temp_out):
 
     genCSV(fbu, 'posts.csv', posts_parsed)
 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= FB COMMENTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
     # Parse comments and likes
     print('Parsing {0}\'s comments and likes...'.format(display_name), flush=True)
     comments_path = os.path.join(temp_out, fbu, 'comments', 'comments.json')
@@ -379,12 +392,14 @@ for fbu in unzip('facebook', temp_out):
                 if out_of_range(timestamp, months_back, last_date): continue
                 comment_date = timestamp.date()
                 comment_time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-                comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url'] if 'attachments' in comment else ''
-                if 'comment' in comment['data'][0]['comment']:
-                    if comment['data'][0]['comment']['comment'] not in rem_comments:
-                        comment_text = scrubadub.clean(comment['data'][0]['comment']['comment'])
+                try: comment_attachment = comment['attachments'][0]['data'][0]['external_context']['url']
+                except: comment_attachment = ""
+                try:
+                    cc = comment['data'][0]['comment']['comment']
+                    if cc not in rem_comments:
+                        comment_text = scrubadub.clean(cc)
                     else: continue
-                else: comment_text = ''
+                except: comment_text = ""
                 comments_parsed.append([comment_date, comment_time, 'Participant', comment_text.encode('latin1').decode('utf8'), '', comment_attachment])
             except Exception as e:
                 print("Error parsing FB comment: " + type(e).__name__ + ": {}".format(e))
@@ -429,6 +444,11 @@ for fbu in unzip('facebook', temp_out):
 
     genCSV(fbu, 'comments.csv', comments_parsed)
 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= BEGIN =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= INSTAGRAM =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
 # Parse Instagram files
 for igu in unzip('instagram', temp_out):
     # Get display name
@@ -441,6 +461,8 @@ for igu in unzip('instagram', temp_out):
 
     print('Parsing {0}\'s Instagram...'.format(display_name), flush=True)
     months_back, last_date = ask_date()
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG COMMENTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     # Parse comments
     print('Parsing {0}\'s comments...'.format(display_name), flush=True)
@@ -477,6 +499,8 @@ for igu in unzip('instagram', temp_out):
 
     genCSV(igu, 'comments.csv', comments_parsed)
 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG FOLLOWERS =-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
     # Parse followers / followees counts
     connections_path = os.path.join(temp_out, igu, 'connections.json')
     connections_json = open(connections_path, encoding='utf8').read()
@@ -488,6 +512,8 @@ for igu in unzip('instagram', temp_out):
         ]
 
     genCSV(igu, 'following.csv', follow_parsed)
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG OFFLINE =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
     if offline:
         # Parse posts
@@ -502,6 +528,9 @@ for igu in unzip('instagram', temp_out):
         unique_post_timestamps = {}  # timestamp -> [media_subroot, num pics in post]
         for i, post in enumerate(posts):
             try:
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
                 print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), end='\r', flush=True)
                 # Parse timestamp
                 timestamp = datetime.strptime(post['taken_at'], '%Y-%m-%dT%H:%M:%S')
@@ -559,6 +588,8 @@ for igu in unzip('instagram', temp_out):
         posts_parsed[1:] = sorted(posts_parsed[1:], key=itemgetter(0,1), reverse=True)
         genCSV(igu, 'posts.csv', posts_parsed)
 
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG ONLINE =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
     else:  # not offline, i.e. online
         # Pull Instagram data from web
         posts_parsed = [['Date', 'Time', 'Media', 'Caption', 'Likes', 'Comments']]
@@ -578,6 +609,9 @@ for igu in unzip('instagram', temp_out):
         print('Parsing {0}\'s media...'.format(display_name), flush=True)
         for post in posts:
             try:
+
+# =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
+
                 if out_of_range(post.date, months_back, last_date): continue
                 print('Parsing media number {0}...'.format(post_counter+1), end='\r', flush=True)
                 media_subroot = ''  # in case it's a video
