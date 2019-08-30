@@ -24,9 +24,10 @@ nltk.download("punkt")
 
 supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 
-offline = True if (len(sys.argv) == 2 and sys.argv[1] == 'offline') else False
+offline = len(sys.argv) == 2 and sys.argv[1] == 'offline'
 
 def blur_faces(image_path):
+    print("Blurring faces for image at location: {0}\n".format(image_path))
     img = cv2.imread(image_path)
     faces = face_recognition.face_locations(img)
     for (top, right, bottom, left) in faces:
@@ -49,7 +50,7 @@ def unzip(platform, temp_path):
     print('Unzipping {0} data dumps...'.format(platform), flush=True)
     zips = glob.glob('./inbox/*_{0}.zip'.format(platform))
     for i, z in enumerate(zips):
-        print('Unzipping {0} of {1} archives...'.format(i+1, len(zips)), end='\r', flush=True)
+        print('Unzipping {0} of {1} archives...'.format(i+1, len(zips)), flush=True)
         with zipfile.ZipFile(z, "r") as zip_ref:
             name = zip_ref.filename
             assert(name[:8] == "./inbox/" and name[-4:] == ".zip")
@@ -194,7 +195,7 @@ for fbu in unzip('facebook', temp_out):
         rem_comments = []
         for post in posts:
             try:
-                print('Parsing {0} of {1} posts...'.format(post_counter, len(posts)), end='\r', flush=True)
+                print('Parsing {0} of {1} posts...'.format(post_counter, len(posts)), flush=True)
                 post_counter += 1
                 # Extract comment details
                 timestamp = datetime.fromtimestamp(post['timestamp'])
@@ -259,7 +260,7 @@ for fbu in unzip('facebook', temp_out):
     #     post_counter = 1
     #     rem_comments = []
     #     for post in posts:
-    #         print('Parsing {0} of {1} group posts...'.format(post_counter, len(posts)), end='\r', flush=True)
+    #         print('Parsing {0} of {1} group posts...'.format(post_counter, len(posts)), flush=True)
     #         post_counter += 1
     #         # Extract comment details
     #         if datetime.fromtimestamp(post['timestamp']) < datetime.fromisoformat(date_string):
@@ -329,7 +330,7 @@ for fbu in unzip('facebook', temp_out):
         rem_comments = []
         for post in posts:
             try:
-                print('Parsing {0} of {1} updates...'.format(post_counter, len(posts)), end='\r', flush=True)
+                print('Parsing {0} of {1} updates...'.format(post_counter, len(posts)), flush=True)
                 post_counter += 1
                 # Extract comment details
                 timestamp = datetime.fromtimestamp(post['timestamp'])
@@ -371,7 +372,7 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
-                print("\n")
+
             except Exception as e:
                 print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
                 continue
@@ -533,7 +534,7 @@ for igu in unzip('instagram', temp_out):
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
-                print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), end='\r', flush=True)
+                print('Parsing {0} of {1} photos...'.format(i+1, len(posts)), flush=True)
                 # Parse timestamp
                 timestamp = datetime.strptime(post['taken_at'], '%Y-%m-%dT%H:%M:%S')
                 media_subroot = None
@@ -569,7 +570,7 @@ for igu in unzip('instagram', temp_out):
                 if file_extension in supported_types:
                     media_subdest = os.path.join(media_subroot, '{0}{1}'.format(str(post_counter-1)+media_id, file_extension))
                     cv2.imwrite(media_subdest, blur_faces(media_src))
-                print("\n")
+
 
             except Exception as e:
                 print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
@@ -577,7 +578,7 @@ for igu in unzip('instagram', temp_out):
 
         # add text content of videos
         for i, video in enumerate(videos):
-            print('Parsing {0} of {1} videos...'.format(i+1, len(videos)), end='\r', flush=True)
+            print('Parsing {0} of {1} videos...'.format(i+1, len(videos)), flush=True)
             if video['taken_at'] not in unique_post_timestamps:  # make new row
                 timestamp = datetime.strptime(video['taken_at'], '%Y-%m-%dT%H:%M:%S')
                 if out_of_range(timestamp, months_back, last_date): continue
@@ -586,7 +587,7 @@ for igu in unzip('instagram', temp_out):
                 caption = scrubadub.clean(video['caption'])
                 entry = [video_date, video_time, '', caption.encode('latin-1', 'ignore').decode('utf8')]
                 posts_parsed.append(entry)
-            print("\n")
+
 
         # sort posts by timestamp
         posts_parsed[1:] = sorted(posts_parsed[1:], key=itemgetter(0,1), reverse=True)
@@ -617,7 +618,7 @@ for igu in unzip('instagram', temp_out):
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= IG POSTS =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 
                 if out_of_range(post.date, months_back, last_date): continue
-                print('Parsing media number {0}...'.format(post_counter+1), end='\r', flush=True)
+                print('Parsing media number {0}...'.format(post_counter+1), flush=True)
                 media_subroot = ''  # in case it's a video
                 if post.typename == 'GraphSidecar' or post.typename == 'GraphImage':  # not video
                     media_subroot = os.path.join(media_root, str(post_counter))
