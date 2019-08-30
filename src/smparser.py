@@ -37,6 +37,7 @@ def blur_faces(image_path):
 
 def genCSV(folder, filename, content):
     # Generate CSVs from data
+    print('\tDownloading the file {0}...\n'.format(filename, folder))
     csv_out = os.path.join(outbox_path, folder, filename)
     os.makedirs(os.path.dirname(csv_out), exist_ok=True)
     with open(csv_out, "w+", encoding='utf-8') as csv_file:
@@ -370,6 +371,7 @@ for fbu in unzip('facebook', temp_out):
                             cv2.imwrite(media_dest, blur_faces(media_src))
                         entry = [post_date, post_time, location, media_dest, caption.encode('latin1').decode('utf8'), friend_comments.encode('latin1').decode('utf8'), subject_comments.encode('latin1').decode('utf8')]
                         posts_parsed.append(entry)
+                print("\n")
             except Exception as e:
                 print("Error parsing FB profile update post: " + type(e).__name__ + ": {}".format(e))
                 continue
@@ -567,6 +569,7 @@ for igu in unzip('instagram', temp_out):
                 if file_extension in supported_types:
                     media_subdest = os.path.join(media_subroot, '{0}{1}'.format(str(post_counter-1)+media_id, file_extension))
                     cv2.imwrite(media_subdest, blur_faces(media_src))
+                print("\n")
 
             except Exception as e:
                 print("Error parsing IG media: " + type(e).__name__ + ": {}".format(e))
@@ -583,6 +586,7 @@ for igu in unzip('instagram', temp_out):
                 caption = scrubadub.clean(video['caption'])
                 entry = [video_date, video_time, '', caption.encode('latin-1', 'ignore').decode('utf8')]
                 posts_parsed.append(entry)
+            print("\n")
 
         # sort posts by timestamp
         posts_parsed[1:] = sorted(posts_parsed[1:], key=itemgetter(0,1), reverse=True)
