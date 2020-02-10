@@ -22,8 +22,13 @@ import re
 import nltk
 nltk.download("punkt")
 
-supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
+if not os.path.isdir('./inbox/temp'): os.mkdir('./inbox/temp')
+if not os.path.isdir('./outbox'): os.mkdir('./outbox')
+temp_out = os.path.join('inbox', 'temp')
+outbox_path = os.path.join('outbox')
 
+rem_comments = []
+supported_types = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']
 offline = len(sys.argv) == 2 and sys.argv[1] == 'offline'
 
 def blur_faces(image_path):
@@ -48,7 +53,7 @@ def genCSV(folder, filename, content):
 
 def unzip(platform, temp_path):
     print('Unzipping {0} data dumps...'.format(platform), flush=True)
-    zips = glob.glob('./inbox/*_{0}.zip'.format(platform))
+    zips = glob.glob('./inbox/*.zip'.format(platform))
     for i, z in enumerate(zips):
         print('Unzipping {0} of {1} archives...'.format(i+1, len(zips)), flush=True)
         with zipfile.ZipFile(z, "r") as zip_ref:
@@ -90,13 +95,6 @@ def ask_date():
 
 def out_of_range(curr, months_back, last_date):
     return (last_date-timedelta(days=months_back*30.4375) >= curr or curr > last_date)
-
-if not os.path.isdir('./inbox/temp'): os.mkdir('./inbox/temp')
-if not os.path.isdir('./outbox'): os.mkdir('./outbox')
-temp_out = os.path.join('inbox', 'temp')
-outbox_path = os.path.join('outbox')
-
-rem_comments = []
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= BEGIN =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= #
