@@ -6,6 +6,13 @@ import nltk
 import re
 import cv2
 import sys
+import json
+import shutil
+from datetime import datetime, timezone, timedelta
+import platform
+import csv
+import instaloader
+import face_recognition
 
 # in: None; out: None
 def init():
@@ -24,12 +31,17 @@ def unzip():
     print("unzipping")
     zips = glob.glob("./inbox/*.zip")
     for zip in zips:
-        with zipfile.ZipFile(z, "r") as zip_ref:
+        with zipfile.ZipFile(zip, "r") as zip_ref:
             name = zip_ref.filename
             assert(name[:8] == "./inbox/" and name[-4:] == ".zip")
             name = name[8:-4]
             dest_path = os.path.join(temp_path, name)
             zip_ref.extractall(dest_path)
+        if os.path.isdir("{0}/{1}".format(dest_path,name)): # extracted with an extra folder
+            shutil.move(dest_path, dest_path+"1")  # rename parent folder
+            shutil.move("{0}/{1}".format(dest_path+"1",name), temp_path)  # move up
+            shutil.rmtree(dest_path+"1")  # remove parent folder
+
 
 def ask_date():
     month_match = re.compile(r"^(\d|\d{2})$")
@@ -54,8 +66,10 @@ def out_of_range(curr, months_back, last_date):
     return (last_date-timedelta(days=months_back*30.4375) >= curr or curr > last_date)
 
 def blur_faces(image_path):
-    print("blurring faces")
-    faces = face_recognition.face_locations(cv2.imread(image_path))
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+    faces = face_recognition.face_locations(img)
     for (top, right, bottom, left) in faces:
         face_image = img[top:bottom, left:right]
         face_image = cv2.GaussianBlur(face_image, (99, 99), 30)
@@ -79,15 +93,19 @@ def get_json(unzip_path, filename):
 # in: string
 # out: timestamp, time, date
 def get_timestamp(when):
-    timestamp = datetime.strptime(when, '%Y-%m-%dT%H:%M:%S')
-    date = timestamp.date()
-    time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
-    return timestamp, date, time
+    try:
+        if "+" in when: when = when[:when.index("+")]
+        timestamp = datetime.strptime(when, '%Y-%m-%dT%H:%M:%S')
+        date = timestamp.date()
+        time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        return timestamp, date, time
+    except ValueError:
+        print("ValueError: wasn't able to parse timestamp {0}".format(when))
 
 # in: text; out: cleaned text
 def clean_text(text):
     text = scrubadub.clean(text)
-    return re.sub(r'@\S*', "{{USERNAME}}", text).encode('latin1', 'ignore').decode('utf8')
+    return re.sub(r'@\S*', "{{USERNAME}}", text).encode('latin1', 'ignore').decode('utf8', 'ignore')
 
 def parse_profile_metadata(unzip_path):
     print("parsing profile metadata")
@@ -102,14 +120,19 @@ def parse_comments(unzip_path, parsed_path, months_back, last_date, username):
     users_comments_on_their_post = [["Date", "Time", "Content"]]
     users_comments_on_other_post = [["Date", "Time", "Content"]]
     for section in data:
-        for comment in section:
+        for comment in data[section]:
             timestamp, date, time = get_timestamp(comment[0])
             if out_of_range(timestamp, months_back, last_date): continue
             content = clean_text(comment[1])
+            if re.compile(r'^\s*$').match(content): continue
             row = [date, time, content]
             author = comment[2]
-            if author == username: users_comments_on_their_post.append(row)
-            else: users_comments_on_other_post.append(row)
+            if author == username:
+                if users_comments_on_their_post[-1][2] == content: continue
+                users_comments_on_their_post.append(row)
+            else:
+                if users_comments_on_other_post[-1][2] == content: continue
+                users_comments_on_other_post.append(row)
     gen_csv(parsed_path, "users_comments_on_their_post", users_comments_on_their_post)
     gen_csv(parsed_path, "users_comments_on_other_post", users_comments_on_other_post)
 
@@ -120,44 +143,60 @@ def parse_follow(unzip_path, parsed_path):
         [len(data['followers']), len(data['following'])]]
     gen_csv(parsed_path, "follow", follow_parsed)
 
-def parse_posts_offline(unzip_path, months_back, last_date):
+# out: true if success
+def add_media(unzip_path, username, media, tracker, timestamp, post_num, num_pics, story):
+    filename, ext_type = media.split(".")
+    if ext_type in ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']:
+        return False
+    media_src = os.path.join(unzip_path, media)
+    media_dest = os.path.join(outbox_path, username, "stories" if story else "media", str(post_num))
+    if not os.path.exists(media_dest): os.makedirs(media_dest, exist_ok=True)
+    img = blur_faces(media_src)
+    if img is None: return False
+    cv2.imwrite(os.path.join(media_dest, "{0}.{1}".format(chr(97+num_pics), ext_type)), img)
+    tracker[timestamp] = (post_num, num_pics + 1)
+    return True
+
+def parse_type(post_lst, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, story=False):
+    tracker = {}  # timestamp -> (post_num, num_pics)
+    parsed_rows = []
+    for i, media in enumerate(post_lst):
+        print("{0} of {1}".format(i, len(post_lst)), end="\r")
+        timestamp, date, time = get_timestamp(media["taken_at"])
+        if out_of_range(timestamp, months_back, last_date): continue
+        if timestamp in tracker:
+            post_num, num_pics = tracker[timestamp]
+            if add_media(unzip_path, username, media["path"], tracker, timestamp, post_num, num_pics + 1, story):
+                tracker[timestamp] = (post_num, num_pics + 1)
+        else:
+            post_num = post_counter
+            num_pics = 0
+            if add_media(unzip_path, username, media["path"], tracker, timestamp, post_num, num_pics, story):
+                tracker[timestamp] = (post_num, num_pics)
+                parsed_rows.append([date, time, os.path.join("stories" if story else "media", str(post_num)), clean_text(media["caption"]), "", ""])
+                timestamps_for_media_parsed.append(timestamp)
+                post_counter += 1
+    return post_counter, parsed_rows
+
+def parse_posts_offline(unzip_path, months_back, last_date, username):
     print("parsing offline posts")
-    media_path = os.path.join(unzip_path, "media")
     media_parsed = [["Date", "Time", "Path", "Caption", "Likes", "Comments"]]
     timestamps_for_media_parsed = []
     post_counter = 0
 
-    # out: true if success
-    def add_media(media, tracker, timestamp, post_num, num_pics):
-        filename, ext_type = os.path.splitext(media)
-        if ext_type not in ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']:
-            return false
-        media_src = os.path.join(unzip_path, media["path"])
-        media_dest = os.path.join(media_path, str(post_num), "{0}.{1}".format(chr(97-1+num_pics), ext_type))
-        cv2.imwrite(media_dest, blur_faces(media_src))
-        tracker[timestamp] = (post_num, num_pics + 1)
-        return true
-
-    def parse_type(post_lst):
-        tracker = {}  # timestamp -> (post_num, num_pics)
-        for media in post_lst:
-            timestamp, date, time = media["taken_at"]
-            if out_of_range(timestamp, months_back, last_date): continue
-            if timestamp in tracker:
-                post_num, num_pics = tracker[timestamp]
-                add_media(media, tracker, timestamp, post_num, num_pics)
-            else:
-                post_num = post_counter
-                num_pics = 0
-                if add_media(media, tracker, timestamp, post_num, num_pics):
-                    media_parsed.append([date, time, os.path.join(media_path, str(post_num)), media["caption"], "", ""])
-                    timestamps_for_media_parsed.append(timestamp)
-                    post_counter += 1
-
     data = get_json(unzip_path, "media")
-    parse_type(data["photos"].extend(data["videos"]))
-    parse_type(data["stories"])
-    parse_type(data["profile"])
+    photo_video = data["photos"]
+    photo_video.extend(data["videos"])
+
+    print("parsing photos and videos")
+    post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
+    media_parsed.extend(new_rows)
+    print("parsing stories")
+    post_counter, new_rows = parse_type(data["stories"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, True)
+    media_parsed.extend(new_rows)
+    print("parsing profile")
+    post_counter, new_rows = parse_type(data["profile"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
+    media_parsed.extend(new_rows)
     return media_parsed, timestamps_for_media_parsed
 
 def parse_posts_online(media_parsed, timestamps_for_media_parsed, username):
@@ -181,16 +220,17 @@ def parse_posts_online(media_parsed, timestamps_for_media_parsed, username):
     return media_parsed
 
 def parse_posts(unzip_path, parsed_path, months_back, last_date, username):
-    media_parsed, timestamps_for_media_parsed = parse_posts_offline(unzip_path, months_back, last_date)
+    media_parsed, timestamps_for_media_parsed = parse_posts_offline(unzip_path, months_back, last_date, username)
     if not offline:
         media_parsed = parse_posts_online(media_parsed, timestamps_for_media_parsed, username)
     gen_csv(parsed_path, "posts", media_parsed)
 
 def parse_all_accounts():
     unzip()
-    for unzip in os.listdir(temp_path):
-        unzip_path = os.path.join(temp_path, unzip)
+    for unzipped in filter(lambda x: not(x.startswith(".")), os.listdir(temp_path)):
+        unzip_path = os.path.join(temp_path, unzipped)
         username, name = parse_profile_metadata(unzip_path)
+        print("parsing user {0}".format(username))
         parsed_path = os.path.join(outbox_path, username)
         months_back, last_date = ask_date()
         parse_comments(unzip_path, parsed_path, months_back, last_date, username)
