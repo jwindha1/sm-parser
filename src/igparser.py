@@ -101,6 +101,10 @@ def get_timestamp(when):
         return timestamp, date, time
     except ValueError:
         print("ValueError: wasn't able to parse timestamp {0}".format(when))
+        timestamp = datetime.today()
+        date = timestamp.date()
+        time = timestamp.strftime("%#I:%M %p") if platform.system() == 'Windows' else timestamp.strftime("%-I:%M %p")
+        return timestamp, date, time
 
 # in: text; out: cleaned text
 def clean_text(text):
