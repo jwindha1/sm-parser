@@ -115,8 +115,8 @@ def parse_profile_metadata(unzip_path):
     print("parsing profile metadata")
     data = get_json(unzip_path, "profile")
     username = data['username']
-    name = data['name'] if 'name' in data else ''
-    return username, name
+    # name = data['name'] if 'name' in data else ''
+    return username
 
 def parse_comments(unzip_path, parsed_path, months_back, last_date, username):
     print("parsing comments")
@@ -190,7 +190,7 @@ def parse_posts_offline(unzip_path, months_back, last_date, username):
 
     data = get_json(unzip_path, "media")
     photo_video = data["photos"]
-    photo_video.extend(data["videos"])
+    if "videos" in data: photo_video.extend(data["videos"])
 
     print("parsing photos and videos")
     post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
@@ -235,7 +235,7 @@ def parse_all_accounts():
         unzip_path = os.path.join(temp_path, unzipped)
         username, name = parse_profile_metadata(unzip_path)
         print("parsing user {0}".format(username))
-        parsed_path = os.path.join(outbox_path, username)
+        parsed_path = os.path.join(outbox_path, unzipped)
         months_back, last_date = ask_date()
         parse_comments(unzip_path, parsed_path, months_back, last_date, username)
         parse_follow(unzip_path, parsed_path)
