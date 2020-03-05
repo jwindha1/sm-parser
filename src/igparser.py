@@ -189,15 +189,16 @@ def parse_posts_offline(unzip_path, months_back, last_date, username):
     post_counter = 0
 
     data = get_json(unzip_path, "media")
-    photo_video = data["photos"]
-    if "videos" in data: photo_video.extend(data["videos"])
-
-    print("parsing photos and videos")
-    post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
-    media_parsed.extend(new_rows)
-    print("parsing stories")
-    post_counter, new_rows = parse_type(data["stories"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, True)
-    media_parsed.extend(new_rows)
+    if "photos" in data:
+        photo_video = data["photos"]
+        if "videos" in data: photo_video.extend(data["videos"])
+        print("parsing photos and videos")
+        post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
+        media_parsed.extend(new_rows)
+    if "stories" in data:
+        print("parsing stories")
+        post_counter, new_rows = parse_type(data["stories"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, True)
+        media_parsed.extend(new_rows)
     print("parsing profile")
     post_counter, new_rows = parse_type(data["profile"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
     media_parsed.extend(new_rows)
@@ -233,7 +234,7 @@ def parse_all_accounts():
     unzip()
     for unzipped in filter(lambda x: not(x.startswith(".")), os.listdir(temp_path)):
         unzip_path = os.path.join(temp_path, unzipped)
-        username, name = parse_profile_metadata(unzip_path)
+        username = parse_profile_metadata(unzip_path)
         print("parsing user {0}".format(username))
         parsed_path = os.path.join(outbox_path, unzipped)
         months_back, last_date = ask_date()
