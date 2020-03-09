@@ -148,12 +148,12 @@ def parse_follow(unzip_path, parsed_path):
     gen_csv(parsed_path, "follow", follow_parsed)
 
 # out: true if success
-def add_media(unzip_path, username, media, tracker, timestamp, post_num, num_pics, story):
+def add_media(unzip_path, unzip_name, media, tracker, timestamp, post_num, num_pics, story):
     filename, ext_type = media.split(".")
     if ext_type in ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tiff', '.tif']:
         return False
     media_src = os.path.join(unzip_path, media)
-    media_dest = os.path.join(outbox_path, username, "stories" if story else "media", str(post_num))
+    media_dest = os.path.join(outbox_path, unzip_name, "stories" if story else "media", str(post_num))
     if not os.path.exists(media_dest): os.makedirs(media_dest, exist_ok=True)
     img = blur_faces(media_src)
     if img is None: return False
@@ -161,7 +161,7 @@ def add_media(unzip_path, username, media, tracker, timestamp, post_num, num_pic
     tracker[timestamp] = (post_num, num_pics + 1)
     return True
 
-def parse_type(post_lst, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, story=False):
+def parse_type(post_lst, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, unzip_name, story=False):
     tracker = {}  # timestamp -> (post_num, num_pics)
     parsed_rows = []
     for i, media in enumerate(post_lst):
@@ -170,19 +170,19 @@ def parse_type(post_lst, post_counter, months_back, last_date, timestamps_for_me
         if out_of_range(timestamp, months_back, last_date): continue
         if timestamp in tracker:
             post_num, num_pics = tracker[timestamp]
-            if add_media(unzip_path, username, media["path"], tracker, timestamp, post_num, num_pics + 1, story):
+            if add_media(unzip_path, unzip_name, media["path"], tracker, timestamp, post_num, num_pics + 1, story):
                 tracker[timestamp] = (post_num, num_pics + 1)
         else:
             post_num = post_counter
             num_pics = 0
-            if add_media(unzip_path, username, media["path"], tracker, timestamp, post_num, num_pics, story):
+            if add_media(unzip_path, unzip_name, media["path"], tracker, timestamp, post_num, num_pics, story):
                 tracker[timestamp] = (post_num, num_pics)
                 parsed_rows.append([date, time, os.path.join("stories" if story else "media", str(post_num)), clean_text(media["caption"]), "", ""])
                 timestamps_for_media_parsed.append(timestamp)
                 post_counter += 1
     return post_counter, parsed_rows
 
-def parse_posts_offline(unzip_path, months_back, last_date, username):
+def parse_posts_offline(unzip_path, months_back, last_date, unzip_name):
     print("parsing offline posts")
     media_parsed = [["Date", "Time", "Path", "Caption", "Likes", "Comments"]]
     timestamps_for_media_parsed = []
@@ -193,14 +193,14 @@ def parse_posts_offline(unzip_path, months_back, last_date, username):
         photo_video = data["photos"]
         if "videos" in data: photo_video.extend(data["videos"])
         print("parsing photos and videos")
-        post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
+        post_counter, new_rows = parse_type(photo_video, post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, unzip_name)
         media_parsed.extend(new_rows)
     if "stories" in data:
         print("parsing stories")
-        post_counter, new_rows = parse_type(data["stories"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username, True)
+        post_counter, new_rows = parse_type(data["stories"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, unzip_name, True)
         media_parsed.extend(new_rows)
     print("parsing profile")
-    post_counter, new_rows = parse_type(data["profile"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, username)
+    post_counter, new_rows = parse_type(data["profile"], post_counter, months_back, last_date, timestamps_for_media_parsed, unzip_path, unzip_name)
     media_parsed.extend(new_rows)
     return media_parsed, timestamps_for_media_parsed
 
@@ -224,8 +224,8 @@ def parse_posts_online(media_parsed, timestamps_for_media_parsed, username):
         media_parsed[timestamps_for_media_parsed.index(timestamp)] = row
     return media_parsed
 
-def parse_posts(unzip_path, parsed_path, months_back, last_date, username):
-    media_parsed, timestamps_for_media_parsed = parse_posts_offline(unzip_path, months_back, last_date, username)
+def parse_posts(unzip_path, parsed_path, months_back, last_date, username, unzip_name):
+    media_parsed, timestamps_for_media_parsed = parse_posts_offline(unzip_path, months_back, last_date, unzip_name)
     if not offline:
         media_parsed = parse_posts_online(media_parsed, timestamps_for_media_parsed, username)
     gen_csv(parsed_path, "posts", media_parsed)
@@ -240,7 +240,7 @@ def parse_all_accounts():
         months_back, last_date = ask_date()
         parse_comments(unzip_path, parsed_path, months_back, last_date, username)
         parse_follow(unzip_path, parsed_path)
-        parse_posts(unzip_path, parsed_path, months_back, last_date, username)
+        parse_posts(unzip_path, parsed_path, months_back, last_date, username, unzipped)
     print("cleaning up")
     shutil.rmtree(temp_path)
 
